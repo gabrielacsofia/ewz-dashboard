@@ -178,19 +178,22 @@
 <nav class="topbar">
   <div class="brand">
     <div class="logo-box">
+      <!-- Estrela de 8 pontas — logotipo oficial EWZ Capital -->
       <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#7bc44a" d="
-          M50,4
-          L56,18 L62,8 L64,23 L73,15 L71,30 L82,25 L76,38 L88,37 L79,48
-          L91,51 L80,59 L90,65 L78,69 L85,78 L72,78 L75,89 L63,85 L62,97
-          L51,90 L48,97 L38,85 L27,89 L28,78 L15,78 L22,69 L10,65 L20,59
-          L9,51 L21,48 L12,37 L24,38 L18,25 L29,30 L27,15 L36,23 L38,8
-          L44,18 Z
+        <polygon fill="#7bc44a" points="
+          50,5   56.9,33.4
+          81.8,18.2  66.6,43.1
+          95,50  66.6,56.9
+          81.8,81.8  56.9,66.6
+          50,95  43.1,66.6
+          18.2,81.8  33.4,56.9
+          5,50   33.4,43.1
+          18.2,18.2  43.1,33.4
         "/>
       </svg>
     </div>
     <div>
-      <div class="brand-title">EWZ Capital</div>
+      <div class="brand-title"><span style="font-weight:700">EWZ</span>Capital</div>
       <div class="brand-badge">Análise de Carteiras</div>
     </div>
   </div>
@@ -441,8 +444,33 @@ function calcGrossUpSpreadIPCA(spread, vencimento) {
   return +spreadEq.toFixed(2);
 }
 
-// Gross-up simples (fallback para Pré e CDI+ sem vencimento)
+// Gross-up simples (fallback sem vencimento — mantido para compatibilidade)
 function grossUp(rate) { return rate / (1 - IR_RATE); }
+
+// Gross-up CDI+ isento → spread equiv. de CDB tributável, IR regressivo por prazo
+// Fórmula: (spread_isento + CDI_ref × IR) / (1 − IR)
+function calcGrossUpCDIPlus(spread, vencimento) {
+  const mat = parseVencimento(vencimento);
+  const today = new Date();
+  const calDays = (mat && mat > today)
+    ? Math.round((mat - today) / (24 * 3600 * 1000))
+    : 730; // fallback longo prazo se sem vencimento
+  const ir  = irBracket(calDays);
+  const cdi = (FOCUS.cdi26 || 13);  // já em % (ex: 13.15)
+  return +((spread + cdi * ir) / (1 - ir)).toFixed(2);
+}
+
+// Gross-up Pré isento → taxa bruta equiv. de CDB tributável, IR regressivo por prazo
+// Fórmula: taxa_isenta / (1 − IR)
+function calcGrossUpPre(rate, vencimento) {
+  const mat = parseVencimento(vencimento);
+  const today = new Date();
+  const calDays = (mat && mat > today)
+    ? Math.round((mat - today) / (24 * 3600 * 1000))
+    : 730;
+  const ir = irBracket(calDays);
+  return +(rate / (1 - ir)).toFixed(2);
+}
 
 // ─── PARSER DE VENCIMENTO ─────────────────────────────────────────────────────
 function parseVencimento(v) {
@@ -492,34 +520,39 @@ async function refreshFocus(silent=false){
   dot.className = 'focus-dot stale';
   if (!silent) lbl.textContent = 'Atualizando...';
 
-  // 1. FOCUS BCB (IPCA + Selic)
+  let focusOk = false;
+
+  // 1. FOCUS BCB (IPCA + Selic) — Olinda API com CORS aberto
   try {
-    const hdrs = { 'Accept': 'application/json' };
     const base = 'https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais';
+    const ctrl = new AbortController();
+    const tmo  = setTimeout(() => ctrl.abort(), 20000); // 20s — API BCB pode ser lenta
     const [iRes, sRes] = await Promise.all([
-      fetch(base+'?$top=100&$filter=Indicador%20eq%20%27IPCA%27&$orderby=Data%20desc,Ano%20asc&$select=Indicador,Data,Ano,Mediana&$format=json', {headers:hdrs}),
-      fetch(base+'?$top=100&$filter=Indicador%20eq%20%27Selic%27&$orderby=Data%20desc,Ano%20asc&$select=Indicador,Data,Ano,Mediana&$format=json', {headers:hdrs})
+      fetch(base+'?$top=200&$filter=Indicador%20eq%20%27IPCA%27&$orderby=Data%20desc,Ano%20asc&$select=Indicador,Data,Ano,Mediana&$format=json', {signal:ctrl.signal}),
+      fetch(base+'?$top=200&$filter=Indicador%20eq%20%27Selic%27&$orderby=Data%20desc,Ano%20asc&$select=Indicador,Data,Ano,Mediana&$format=json', {signal:ctrl.signal})
     ]);
-    if (!iRes.ok || !sRes.ok) throw new Error('HTTP '+iRes.status);
+    clearTimeout(tmo);
+    if (!iRes.ok || !sRes.ok) throw new Error('HTTP '+iRes.status+'/'+sRes.status);
     const iData = await iRes.json();
     const sData = await sRes.json();
 
     const findLatestComplete = (rows) => {
       const byDate = {};
-      rows.forEach(r=>{ if(!byDate[r.Data]) byDate[r.Data]=[]; byDate[r.Data].push(r); });
+      rows.forEach(r=>{ const d=r.Data; if(!byDate[d]) byDate[d]=[]; byDate[d].push({...r, Ano:+r.Ano}); });
       const dates = Object.keys(byDate).sort().reverse();
       for (const d of dates) {
         const years = byDate[d].map(r=>r.Ano);
         if ([2026,2027,2028].every(y=>years.includes(y))) return {date:d, rows:byDate[d]};
       }
-      return {date:rows[0]?.Data, rows:rows.filter(r=>r.Data===rows[0]?.Data)};
+      const lastDate = dates[0];
+      return {date:lastDate, rows:byDate[lastDate]||[]};
     };
 
     const iLatest = findLatestComplete(iData.value||[]);
     const sLatest = findLatestComplete(sData.value||[]);
     const iByYear = {}, sByYear = {};
-    (iLatest.rows||[]).forEach(r=>{ iByYear[r.Ano]=r.Mediana; });
-    (sLatest.rows||[]).forEach(r=>{ sByYear[r.Ano]=r.Mediana; });
+    (iLatest.rows||[]).forEach(r=>{ iByYear[+r.Ano]=r.Mediana; });
+    (sLatest.rows||[]).forEach(r=>{ sByYear[+r.Ano]=r.Mediana; });
     [2026,2027,2028].forEach(y=>{
       if (iByYear[y] != null) FOCUS['ipca'+String(y).slice(2)] = iByYear[y];
       if (sByYear[y] != null) {
@@ -527,50 +560,73 @@ async function refreshFocus(silent=false){
         FOCUS['cdi'  +String(y).slice(2)] = +(sByYear[y]-0.1).toFixed(2);
       }
     });
-    FOCUS.lastUpdate  = iLatest.date || sLatest.date;
-    FOCUS.autoLoaded  = true;
+    FOCUS.lastUpdate = iLatest.date || sLatest.date;
+    FOCUS.autoLoaded = true;
+    focusOk = !!FOCUS.lastUpdate;
   } catch(e) {
-    // mantém defaults
+    console.warn('[EWZ Focus]', e.name, e.message);
+    if (!silent) {
+      const reason = e.name === 'AbortError' ? 'timeout (20s)' : e.message.slice(0,80);
+      lbl.textContent = `Focus: erro — ${reason}`;
+    }
   }
 
-  // 2. CDI SPOT — BCB SGS série 12 (taxa CDI diária)
+  // 2. CDI SPOT — BCB SGS série 12 (CORS aberto)
   try {
-    const cdiRes  = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json');
+    const cdiCtrl = new AbortController();
+    const cdiTmo  = setTimeout(() => cdiCtrl.abort(), 12000);
+    const cdiRes  = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json', {signal:cdiCtrl.signal});
+    clearTimeout(cdiTmo);
     const cdiJson = await cdiRes.json();
-    const cdiDia  = parseFloat(cdiJson[0].valor) / 100; // taxa diária em decimal
-    MARKET.cdiSpot = Math.pow(1 + cdiDia, 252) - 1;    // anualiza base 252 du
+    const cdiDia  = parseFloat(cdiJson[0].valor) / 100;
+    MARKET.cdiSpot = Math.pow(1 + cdiDia, 252) - 1; // anualiza base 252 du
   } catch(e) {
-    // fallback: usa cdi26 do Focus
+    console.warn('[EWZ CDI spot]', e.name, e.message);
     MARKET.cdiSpot = null;
   }
 
-  // 3. NTN-B RATES — Tesouro Direto (Tesouro IPCA+)
+  // 3. NTN-B — BrasilAPI (CORS aberto; Tesouro Direto direto bloqueia origens externas)
   try {
-    const tdRes  = await fetch('https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/service/api/treasurybondsfile.json');
+    const tdCtrl = new AbortController();
+    const tdTmo  = setTimeout(() => tdCtrl.abort(), 15000);
+    const tdRes  = await fetch('https://brasilapi.com.br/api/tesouro-direto/v1', {signal:tdCtrl.signal});
+    clearTimeout(tdTmo);
+    if (!tdRes.ok) throw new Error('HTTP '+tdRes.status);
     const tdJson = await tdRes.json();
-    const bonds  = (tdJson.response?.TrsrBdTradgList || [])
-      .map(x => x.TrsrBd)
-      .filter(b => b && b.TrsrBdTyp?.nm === 'Tesouro IPCA+');
-    MARKET.ntnbRates = bonds.map(b => ({
-      maturity: new Date(b.mtrtyDt),
-      rate:     parseFloat(b.anulInvstmtRate)
-    })).filter(b => !isNaN(b.rate) && b.maturity > new Date());
-    MARKET.ntnbLoaded = MARKET.ntnbRates.length > 0;
+    // BrasilAPI retorna array de títulos; filtra Tesouro IPCA+
+    const bonds = (Array.isArray(tdJson) ? tdJson : [])
+      .filter(b => b && b.nome && b.nome.startsWith('Tesouro IPCA+'))
+      .map(b => ({
+        maturity: new Date(b.vencimento),
+        rate:     parseFloat(b.taxa_compra || b.taxa_juros || 0)
+      }))
+      .filter(b => !isNaN(b.rate) && b.rate > 0 && b.maturity > new Date());
+    MARKET.ntnbRates  = bonds;
+    MARKET.ntnbLoaded = bonds.length > 0;
   } catch(e) {
+    console.warn('[EWZ NTN-B]', e.name, e.message);
     MARKET.ntnbLoaded = false;
   }
 
-  // Atualiza pill
+  // Atualiza pill — só sobrescreve "Focus: erro" se Focus funcionou
   const ntnbMark = MARKET.ntnbLoaded ? ' · NTN-B ✓' : '';
   const cdiMark  = MARKET.cdiSpot != null
     ? ` · CDI ${fmtR(MARKET.cdiSpot*100,2)}%`
     : '';
-  if (FOCUS.lastUpdate) {
-    dot.className    = 'focus-dot';
-    lbl.textContent  = 'Focus '+FOCUS.lastUpdate.slice(0,10)+cdiMark+ntnbMark;
+
+  if (focusOk) {
+    dot.className   = 'focus-dot';
+    lbl.textContent = 'Focus '+FOCUS.lastUpdate.slice(0,10)+cdiMark+ntnbMark;
+  } else if (!silent) {
+    // Mantém a mensagem de erro já exibida no catch — não sobrescreve
+    dot.className = 'focus-dot stale';
+    // Só atualiza label se não havia erro (ex: chamada silenciosa)
+    if (lbl.textContent === 'Atualizando...' || lbl.textContent.startsWith('Focus')) {
+      lbl.textContent = 'Focus: falhou'+cdiMark;
+    }
   } else {
-    dot.className    = 'focus-dot stale';
-    lbl.textContent  = 'Focus (manual)'+cdiMark+ntnbMark;
+    dot.className   = 'focus-dot stale';
+    lbl.textContent = 'Focus (manual)'+cdiMark+ntnbMark;
   }
 
   if (dashData) buildLineChart(projPeriod);
@@ -722,8 +778,10 @@ function parseExcel(arrayBuffer){
     const exemptRatio    = total > 0 ? exemptValue/total : 0;
 
     // Média ponderada do equivalente — função e unidade dependem do indexador:
-    // % do CDI → avg em % CDI (metodologia BTG)
+    // % do CDI → avg em % CDI (metodologia BTG, IR regressivo por prazo)
     // IPCA+    → avg em spread real % a.a. (expresso como "IPCA + X%")
+    // CDI+     → avg em spread equiv. % a.a. (IR regressivo por prazo)
+    // Pré      → avg em taxa bruta equiv. % a.a. (IR regressivo por prazo)
     let wEquiv = 0, wEquivTot = 0;
     assets.filter(a=>a.exempt).forEach(a=>{
       let eq = null;
@@ -731,6 +789,10 @@ function parseExcel(arrayBuffer){
         eq = calcEquivPctCDI(a.taxa, a.vencimento);
       } else if (name === 'IPCA+') {
         eq = calcGrossUpSpreadIPCA(a.taxa, a.vencimento);
+      } else if (name === 'CDI+') {
+        eq = calcGrossUpCDIPlus(a.taxa, a.vencimento);
+      } else if (name === 'Pré') {
+        eq = calcGrossUpPre(a.taxa, a.vencimento);
       }
       if (eq !== null) {
         wEquiv    += eq * a.valorBruto;
@@ -975,10 +1037,17 @@ function buildTaxaCards(rf_idx, proj){
           guStr = `IPCA + ${fmtR(spreadGU,2)}% equiv.`;
         }
       } else if (k === 'CDI+') {
-        const spreadGU = (v.displayRate + FOCUS.cdi26 * IR_RATE) / (1 - IR_RATE);
-        guStr = `CDI + ${fmtR(spreadGU,2)}% equiv.`;
+        // spread equiv. ponderado com IR regressivo por prazo de cada ativo
+        const guVal = v.avgEquivPctCDI != null
+          ? v.avgEquivPctCDI
+          : calcGrossUpCDIPlus(v.displayRate, null);
+        guStr = `CDI + ${fmtR(guVal,2)}% equiv.`;
       } else {
-        guStr = `${fmtR(grossUp(v.displayRate),2)}% a.a. equiv.`;
+        // Pré — taxa bruta equiv. ponderada com IR regressivo por prazo de cada ativo
+        const guVal = v.avgEquivPctCDI != null
+          ? v.avgEquivPctCDI
+          : calcGrossUpPre(v.displayRate, null);
+        guStr = `${fmtR(guVal,2)}% a.a. equiv.`;
       }
       grossUpHtml = `<div class="exempt-badge">★ Isento IR · ${guStr}</div>`;
     }
@@ -1058,10 +1127,11 @@ function openModal(idxName, assets, displayRate){
         const spreadEq = calcGrossUpSpreadIPCA(t, venc);
         guStr = 'IPCA+'+fmtR(spreadEq,2)+'%';
       } else if (idxName === 'CDI+') {
-        const spreadGU = (t + FOCUS.cdi26 * IR_RATE) / (1 - IR_RATE);
-        guStr = 'CDI+'+fmtR(spreadGU,2)+'%';
+        // IR regressivo por prazo de cada ativo
+        guStr = 'CDI+'+fmtR(calcGrossUpCDIPlus(t, venc),2)+'%';
       } else {
-        guStr = fmtR(grossUp(t),2)+'% a.a.';
+        // Pré — IR regressivo por prazo de cada ativo
+        guStr = fmtR(calcGrossUpPre(t, venc),2)+'% a.a.';
       }
       base += `<span class="grossup-note" title="Equivalente tributável">→ ${guStr} bruto</span>`;
     }
@@ -1098,8 +1168,10 @@ function openModal(idxName, assets, displayRate){
         ? `inflação implícita via NTN-B do Tesouro Direto`
         : `IPCA Focus (NTN-B não disponível — clique em "Focus BCB" para carregar)`;
       grossUpNote += `<div class="modal-grossup-note">★ Gross-up IPCA+ isento: usa ${srcStr} para calcular o spread real equivalente de um CDB tributável IPCA+ com mesmo VF líquido. IR regressivo por prazo (22,5%→15%).</div>`;
+    } else if (idxName === 'CDI+') {
+      grossUpNote += `<div class="modal-grossup-note">★ Gross-up CDI+ isento: fórmula (spread + CDI × IR) / (1 − IR), alíquota IR regressiva por prazo de cada ativo (≤180d: 22,5% · 181–360d: 20% · 361–720d: 17,5% · &gt;720d: 15%). Spread equivalente de CDB tributável CDI+ com mesmo VF líquido.</div>`;
     } else {
-      grossUpNote += `<div class="modal-grossup-note">★ Ativos isentos de IR — gross-up com IR de ${(IR_RATE*100).toFixed(0)}% (longo prazo).</div>`;
+      grossUpNote += `<div class="modal-grossup-note">★ Gross-up Pré isento: fórmula taxa / (1 − IR), alíquota IR regressiva por prazo de cada ativo (≤180d: 22,5% · 181–360d: 20% · 361–720d: 17,5% · &gt;720d: 15%). Taxa bruta equivalente de CDB tributável com mesmo VF líquido.</div>`;
     }
   }
   if (hasAnyUnknown) {
