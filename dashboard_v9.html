@@ -513,29 +513,35 @@ async function refreshFocus(silent=false){
 
   let focusOk = false;
 
-  // 1. FOCUS BCB — endpoint Latest (retorna só a última divulgação, sem ordenação)
-try {
-    // 1. Removido o "Latest" do final do endpoint
+// 1. FOCUS BCB
+  try {
     const baseUrl = 'https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais';
     const ctrl = new AbortController();
     const tmo  = setTimeout(() => ctrl.abort(), 25000);
     
-    // 2. Adicionado $orderby=Data desc e $top=10 para simular o comportamento de um endpoint "Latest"
-    // (Lembrando que 1 relatório Focus traz expectativas para vários anos, por isso top=10 é mais seguro que top=1)
     const [iRes, sRes] = await Promise.all([
-      fetch(baseUrl + '?$filter=Indicador%20eq%20%27IPCA%27&$orderby=Data%20desc&$top=10&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal}),
-      fetch(baseUrl + '?$filter=Indicador%20eq%20%27Selic%27&$orderby=Data%20desc&$top=10&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal})
+      // Correção: Trocado 'Ano' por 'DataReferencia' no $select
+      fetch(baseUrl + '?$filter=Indicador%20eq%20%27IPCA%27&$orderby=Data%20desc&$top=10&$select=Data,DataReferencia,Mediana&$format=json', {signal:ctrl.signal}),
+      fetch(baseUrl + '?$filter=Indicador%20eq%20%27Selic%27&$orderby=Data%20desc&$top=10&$select=Data,DataReferencia,Mediana&$format=json', {signal:ctrl.signal})
     ]);
     clearTimeout(tmo);
+    
     if (!iRes.ok || !sRes.ok) throw new Error('HTTP '+iRes.status+'/'+sRes.status);
+    
     const iData = await iRes.json();
     const sData = await sRes.json();
 
-    const iRows = (iData.value||[]).map(r=>({...r, Ano:+r.Ano}));
-    const sRows = (sData.value||[]).map(r=>({...r, Ano:+r.Ano}));
+    // Correção: Lendo a propriedade correta (DataReferencia) e mapeando internamente como Ano
+    const iRows = (iData.value||[]).map(r=>({...r, Ano:+r.DataReferencia}));
+    const sRows = (sData.value||[]).map(r=>({...r, Ano:+r.DataReferencia}));
+    
     const iByYear = {}, sByYear = {};
-    iRows.forEach(r=>{ iByYear[r.Ano]=r.Mediana; });
-    sRows.forEach(r=>{ sByYear[r.Ano]=r.Mediana; });
+    
+    // Ajuste lógico: Preenche apenas se estiver vazio. 
+    // Como estamos ordenando por "Data desc", o primeiro dado que chega (índice 0) é sempre o mais atualizado.
+    iRows.forEach(r=>{ if (iByYear[r.Ano] == null) iByYear[r.Ano] = r.Mediana; });
+    sRows.forEach(r=>{ if (sByYear[r.Ano] == null) sByYear[r.Ano] = r.Mediana; });
+    
     [2026,2027,2028].forEach(y=>{
       if (iByYear[y] != null) FOCUS['ipca'+String(y).slice(2)] = iByYear[y];
       if (sByYear[y] != null) {
@@ -543,11 +549,13 @@ try {
         FOCUS['cdi'  +String(y).slice(2)] = +(sByYear[y]-0.1).toFixed(2);
       }
     });
+    
     // Data da última divulgação
     const lastDate = (iRows[0]||sRows[0]||{}).Data || null;
     FOCUS.lastUpdate = lastDate;
     FOCUS.autoLoaded = true;
     focusOk = !!FOCUS.lastUpdate;
+    
   } catch(e) {
     console.warn('[EWZ Focus]', e.name, e.message);
     if (!silent) {
@@ -555,7 +563,6 @@ try {
       lbl.textContent = `Focus: erro — ${reason}`;
     }
   }
-
   // 2. CDI SPOT — BCB SGS série 12 (CORS aberto)
   try {
     const cdiCtrl = new AbortController();
