@@ -514,13 +514,17 @@ async function refreshFocus(silent=false){
   let focusOk = false;
 
   // 1. FOCUS BCB — endpoint Latest (retorna só a última divulgação, sem ordenação)
-  try {
-    const baseLatest = 'https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuaisLatest';
+try {
+    // 1. Removido o "Latest" do final do endpoint
+    const baseUrl = 'https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais';
     const ctrl = new AbortController();
     const tmo  = setTimeout(() => ctrl.abort(), 25000);
+    
+    // 2. Adicionado $orderby=Data desc e $top=10 para simular o comportamento de um endpoint "Latest"
+    // (Lembrando que 1 relatório Focus traz expectativas para vários anos, por isso top=10 é mais seguro que top=1)
     const [iRes, sRes] = await Promise.all([
-      fetch(baseLatest+'?$filter=Indicador%20eq%20%27IPCA%27&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal}),
-      fetch(baseLatest+'?$filter=Indicador%20eq%20%27Selic%27&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal})
+      fetch(baseUrl + '?$filter=Indicador%20eq%20%27IPCA%27&$orderby=Data%20desc&$top=10&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal}),
+      fetch(baseUrl + '?$filter=Indicador%20eq%20%27Selic%27&$orderby=Data%20desc&$top=10&$select=Data,Ano,Mediana&$format=json', {signal:ctrl.signal})
     ]);
     clearTimeout(tmo);
     if (!iRes.ok || !sRes.ok) throw new Error('HTTP '+iRes.status+'/'+sRes.status);
