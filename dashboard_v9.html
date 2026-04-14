@@ -577,24 +577,38 @@ async function refreshFocus(silent=false){
     MARKET.cdiSpot = null;
   }
 
-  // 3. NTN-B — BrasilAPI (CORS aberto; Tesouro Direto direto bloqueia origens externas)
+  // 3. NTN-B — Proxy Cloudflare (Dados oficiais B3 com CORS liberado)
   try {
     const tdCtrl = new AbortController();
     const tdTmo  = setTimeout(() => tdCtrl.abort(), 15000);
-    const tdRes  = await fetch('https://brasilapi.com.br/api/tesouro-direto/v1', {signal:tdCtrl.signal});
+    
+    // URL do seu Worker do Cloudflare
+    const workerUrl = 'https://proxy-tesouro-ewz.gabriela-sofia.workers.dev/';
+    
+    const tdRes  = await fetch(workerUrl, {signal:tdCtrl.signal});
     clearTimeout(tdTmo);
+    
     if (!tdRes.ok) throw new Error('HTTP '+tdRes.status);
     const tdJson = await tdRes.json();
-    // BrasilAPI retorna array de títulos; filtra Tesouro IPCA+
-    const bonds = (Array.isArray(tdJson) ? tdJson : [])
-      .filter(b => b && b.nome && b.nome.startsWith('Tesouro IPCA+'))
-      .map(b => ({
-        maturity: new Date(b.vencimento),
-        rate:     parseFloat(b.taxa_compra || b.taxa_juros || 0)
+    
+    // A estrutura do JSON da B3 é aninhada. A lista de títulos fica aqui:
+    const rawList = tdJson?.response?.TrsrBdTradgList || [];
+
+    // Filtra Tesouro IPCA+ e extrai a taxa e o vencimento corretamente
+    const bonds = rawList
+      .filter(item => {
+         const name = item.TrsrBd?.nm || '';
+         return name.includes('Tesouro IPCA+');
+      })
+      .map(item => ({
+        maturity: new Date(item.TrsrBd.mtrtyDt),
+        rate:     parseFloat(item.TrsrBdUntl.annualInvstmtRate || 0)
       }))
       .filter(b => !isNaN(b.rate) && b.rate > 0 && b.maturity > new Date());
+
     MARKET.ntnbRates  = bonds;
     MARKET.ntnbLoaded = bonds.length > 0;
+    
   } catch(e) {
     console.warn('[EWZ NTN-B]', e.name, e.message);
     MARKET.ntnbLoaded = false;
