@@ -16,7 +16,6 @@
     --border: #1c3d20;
     --border2: #263f2a;
     --gold: #7bc44a;
-    --gold2: #9dd96a;
     --gold-dim: rgba(123, 196, 74, 0.12);
     --cream: #e8e0d0;
     --muted: #6b8a72;
@@ -25,7 +24,6 @@
     --green-dim: rgba(123, 196, 74, 0.12);
     --blue: #3f8fd4;
     --orange: #e07d3d;
-    --purple: #8b5cf6;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -74,8 +72,7 @@
   .focus-pill {
     display: flex; align-items: center; gap: 6px;
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 5px 12px; font-size: .7rem; cursor: pointer; transition: border-color .15s;
-    flex-shrink: 0;
+    padding: 5px 12px; font-size: .7rem; cursor: pointer; transition: border-color .15s; flex-shrink: 0;
   }
   .focus-pill:hover { border-color: var(--gold); }
   .focus-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
@@ -142,9 +139,6 @@
   .sc .val.g { color: var(--green); }
   .sc .val.gold { color: var(--gold); }
   .sc .sub { font-size: .68rem; color: var(--muted); margin-top: 3px; }
-  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .62rem; padding: 2px 8px; border-radius: 20px; margin-top: 4px; }
-  .badge.g { background: var(--green-dim); color: var(--green); }
-  .badge.gold { background: var(--gold-dim); color: var(--gold); }
 
   .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
   .gfull { margin-bottom: 16px; }
@@ -157,15 +151,11 @@
   /* PIE CHARTS */
   .pie-wrap { display: flex; align-items: center; gap: 18px; }
   .pie-c { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
-  .pie-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-  .pie-val { font-family: 'Fraunces', serif; font-size: 1.05rem; color: var(--cream); }
-  .pie-lbl { font-size: .52rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 1px; }
   .leg { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; max-height: 200px; }
   .leg-item { display: flex; align-items: center; gap: 8px; }
   .leg-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
   .leg-name { font-size: .75rem; flex: 1; color: var(--cream); }
   .leg-pct { font-size: .72rem; font-weight: 600; color: var(--muted); }
-  .leg-val { font-size: .68rem; color: var(--muted2); }
 
   /* TAXA CARDS */
   .taxa-grid { display: grid; gap: 12px; }
@@ -175,18 +165,9 @@
     align-items: center; gap: 16px; transition: border-color .2s, transform .15s; cursor: pointer;
   }
   .taxa-card:hover { transform: translateX(2px); border-color: var(--gold); }
-  .taxa-card-left { display: flex; flex-direction: column; gap: 3px; padding-left: 4px; }
   .taxa-idx-name { font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-  .taxa-rate-big { font-family: 'Fraunces', serif; font-size: 1.7rem; font-weight: 400; line-height: 1; }
-  .taxa-rate-sub { font-size: .7rem; color: var(--muted); margin-top: 2px; }
-  .taxa-row { display: flex; gap: 20px; margin-top: 10px; }
-  .taxa-proj-lbl { font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted2); margin-bottom: 2px; }
-  .taxa-proj-val { font-size: .88rem; font-weight: 600; }
-  .taxa-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .taxa-rate-big { font-family: 'Fraunces', serif; font-size: 1.7rem; font-weight: 400; line-height: 1; margin-top: 2px;}
   .taxa-alloc-lbl { font-size: .62rem; color: var(--muted); text-align: right; }
-  .taxa-alloc-val { font-size: .95rem; font-weight: 700; text-align: right; }
-  .taxa-weight-bar { width: 70px; height: 4px; background: var(--border); border-radius: 2px; }
-  .taxa-weight-fill { height: 100%; border-radius: 2px; }
   
   .exempt-badge {
     display: inline-flex; align-items: center; gap: 4px; font-size: .6rem; padding: 2px 7px;
@@ -197,7 +178,7 @@
     border-radius: 10px; background: rgba(224,125,61,0.1); color: #e07d3d; margin-top: 4px; width: fit-content;
   }
 
-  /* LINE CHART */
+  /* LINE CHART & BUTTONS */
   .toggle-btns { display: flex; gap: 6px; flex-wrap: wrap; }
   .tbtn {
     padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: .72rem; font-weight: 600;
@@ -214,10 +195,6 @@
   .series-btn.act { opacity: 1; }
   .chart-h { position: relative; height: 300px; }
   .chart-series-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-
-  /* FOOTNOTE */
-  .foot { font-size: .62rem; color: var(--muted2); padding: 10px 0 20px; border-top: 1px solid var(--border); line-height: 1.7; }
-  .foot span { color: var(--gold); }
 
   /* MODAL */
   .modal { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; }
@@ -241,7 +218,6 @@
   .asset-table th:not(:first-child) { text-align: right; }
   .asset-table td { font-size: .76rem; padding: 10px 10px; border-bottom: 1px solid rgba(28,61,32,.5); color: var(--cream); }
   .asset-table td:not(:first-child) { text-align: right; }
-  .asset-table tr:last-child td { border-bottom: none; }
   .asset-table tr:hover td { background: rgba(28,61,32,.4); }
   
   .exempt-tag { font-size: .6rem; padding: 2px 6px; border-radius: 8px; background: rgba(212,169,66,0.12); color: #d4a942; margin-left: 6px; vertical-align: middle; }
@@ -344,7 +320,7 @@
     <div class="modal-body" id="modalBody"></div>
   </div>
 </div>
-<script>
+  <script>
 // ─── DADOS E ESTADOS GLOBAIS ────────────────────────────────────────────────
 const FOCUS = {
   ipca26: 4.36, ipca27: 3.85, ipca28: 3.60,
@@ -368,7 +344,8 @@ const ICONS = { 'IPCA+': '📈', '% do CDI': '💹', 'CDI+': '💰', 'Pré': '�
 let dashData = null;
 let charts = {};
 let projPeriod = 12;
-let activeSeriesSet = new Set();
+// Restaurado: O gráfico começa mostrando a diferença entre a Carteira Original e o Gross-up
+let activeSeriesSet = new Set(['Carteira RF (Original)', 'Carteira RF (Gross-up)', 'CDI']);
 let chartStartMonth = null;
 let chartStartYear = null;
 
@@ -472,7 +449,6 @@ async function refreshFocus(silent = false) {
   
   let focusOk = false;
   
-  // 1. FOCUS BCB (Blindado)
   try {
     const base = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais";
     const qI = encodeURI("?$filter=Indicador eq 'IPCA'&$orderby=Data desc&$top=40&$format=json");
@@ -503,7 +479,6 @@ async function refreshFocus(silent = false) {
     if (!silent) lbl.textContent = `Focus: Offline`;
   }
   
-  // 2. CDI Spot
   try {
     const ac = new AbortController();
     const tm = setTimeout(() => ac.abort(), 8000);
@@ -512,7 +487,6 @@ async function refreshFocus(silent = false) {
     MARKET.cdiSpot = Math.pow(1 + parseFloat((await r.json())[0].valor) / 100, 252) - 1;
   } catch (e) { MARKET.cdiSpot = null; }
 
-  // 3. Curvas B3
   try {
     const ac = new AbortController();
     const tm = setTimeout(() => ac.abort(), 12000);
@@ -539,7 +513,7 @@ async function refreshFocus(silent = false) {
   
   if (dashData) buildLineChart(projPeriod);
 }
-  // ─── UPLOAD E LEITURA DA PLANILHA ───────────────────────────────────────────
+// ─── UPLOAD E LEITURA DA PLANILHA ───────────────────────────────────────────
 function switchTab(t) {
   document.getElementById('tabUpload').classList.toggle('act', t === 'upload');
   document.getElementById('tabDash').classList.toggle('act', t === 'dash');
@@ -574,8 +548,7 @@ function processFile(file) {
       alert('Erro ao processar a planilha: ' + err.message);
       console.error(err);
     }
-    // A limpeza do input foi movida para DENTRO do onload, após a leitura finalizar!
-    // Isso evita o bug de não conseguir enviar a mesma planilha duas vezes
+    // Correção Fantasma: Limpa o input DEPOIS da leitura, permitindo reenviar a mesma planilha
     const fileInput = document.getElementById('fileInput');
     if (fileInput) fileInput.value = ''; 
   };
@@ -675,9 +648,10 @@ function parseExcel(ab) {
   };
 }
 
-// ─── RENDERIZAÇÃO DO DASHBOARD E GRÁFICOS ───────────────────────────────────
+// ─── DUPLA PROJEÇÃO: ORIGINAL VS GROSS-UP ───────────────────────────────────
 function calcProj(rf_idx) {
-  const pj = {}, F = FOCUS, { cdi26, cdi27, cdi28 } = F;
+  const pj = { orig: {}, eq: {} };
+  const F = FOCUS, { cdi26, cdi27, cdi28 } = F;
   
   const gI = (y) => {
     if (!MARKET.curvesLoaded) return F[`ipca${String(y).slice(2)}`];
@@ -685,26 +659,44 @@ function calcProj(rf_idx) {
     const r = interpolarTaxa(MARKET.curvaIpca, d), n = interpolarTaxa(MARKET.curvaPre, d);
     return r !== null && n !== null ? ((1 + n / 100) / (1 + r / 100) - 1) * 100 : F[`ipca${String(y).slice(2)}`];
   };
-  
   MARKET.imp26 = gI(2026); MARKET.imp27 = gI(2027); MARKET.imp28 = gI(2028);
   
-  const p = (nm, p26, p27, p28) => { if (rf_idx[nm]?.displayRate != null) pj[nm] = { p26, p27, p28 }; };
-  
-  if (rf_idx['% do CDI']?.displayRate != null) p('% do CDI', (rf_idx['% do CDI'].displayRate / 100) * cdi26, (rf_idx['% do CDI'].displayRate / 100) * cdi27, (rf_idx['% do CDI'].displayRate / 100) * cdi28);
-  if (rf_idx['CDI+']?.displayRate != null) p('CDI+', cdi26 + rf_idx['CDI+'].displayRate, cdi27 + rf_idx['CDI+'].displayRate, cdi28 + rf_idx['CDI+'].displayRate);
-  if (rf_idx['IPCA+']?.displayRate != null) p('IPCA+', MARKET.imp26 + rf_idx['IPCA+'].displayRate, MARKET.imp27 + rf_idx['IPCA+'].displayRate, MARKET.imp28 + rf_idx['IPCA+'].displayRate);
-  if (rf_idx['Pré']?.displayRate != null) p('Pré', rf_idx['Pré'].displayRate, rf_idx['Pré'].displayRate, rf_idx['Pré'].displayRate);
-  
-  let w26 = 0, w27 = 0, w28 = 0, wt = 0;
-  ['% do CDI', 'CDI+', 'IPCA+', 'Pré'].forEach(n => {
-    const x = rf_idx[n], pr = pj[n];
-    if (x && pr && x.weight > 0) { w26 += x.weight * pr.p26; w27 += x.weight * pr.p27; w28 += x.weight * pr.p28; wt += x.weight; }
+  const addProj = (target, nm, val, isPct, isSpreadCDI, isSpreadIPCA, isPre) => {
+    if (val == null) return;
+    if (isPct) target[nm] = { p26: (val/100)*cdi26, p27: (val/100)*cdi27, p28: (val/100)*cdi28 };
+    if (isSpreadCDI) target[nm] = { p26: cdi26+val, p27: cdi27+val, p28: cdi28+val };
+    if (isSpreadIPCA) target[nm] = { p26: MARKET.imp26+val, p27: MARKET.imp27+val, p28: MARKET.imp28+val };
+    if (isPre) target[nm] = { p26: val, p27: val, p28: val };
+  };
+
+  ['% do CDI', 'CDI+', 'IPCA+', 'Pré'].forEach(nm => {
+    const v = rf_idx[nm];
+    if (!v) return;
+    addProj(pj.orig, nm, v.displayRate, nm==='% do CDI', nm==='CDI+', nm==='IPCA+', nm==='Pré');
+    addProj(pj.eq, nm, v.taxaMediaEquivalente, nm==='% do CDI', nm==='CDI+', nm==='IPCA+', nm==='Pré');
   });
   
-  if (wt > 0) pj['Carteira RF'] = { p26: w26 / wt, p27: w27 / wt, p28: w28 / wt };
+  let w26O=0, w27O=0, w28O=0;
+  let w26E=0, w27E=0, w28E=0;
+  let wt=0;
+  
+  ['% do CDI', 'CDI+', 'IPCA+', 'Pré'].forEach(n => {
+    const x = rf_idx[n], po = pj.orig[n], pe = pj.eq[n];
+    if (x && x.weight > 0) {
+      wt += x.weight;
+      if(po) { w26O += x.weight * po.p26; w27O += x.weight * po.p27; w28O += x.weight * po.p28; }
+      if(pe) { w26E += x.weight * pe.p26; w27E += x.weight * pe.p27; w28E += x.weight * pe.p28; }
+    }
+  });
+  
+  if (wt > 0) {
+    pj.orig['Carteira RF'] = { p26: w26O / wt, p27: w27O / wt, p28: w28O / wt };
+    pj.eq['Carteira RF Gross-up'] = { p26: w26E / wt, p27: w27E / wt, p28: w28E / wt };
+  }
   return pj;
 }
 
+// ─── RENDERIZAÇÃO DO DASHBOARD E GRÁFICOS ───────────────────────────────────
 function renderDash(d) {
   Object.values(charts).forEach(c => { try { c.destroy(); } catch (e) { } });
   charts = {};
@@ -736,20 +728,20 @@ function renderDash(d) {
     <div class="sc">
       <div class="label">Retorno 12M</div>
       <div class="val g">${d.r12m ? fmtR(d.r12m) + '%' : '—'}</div>
-      ${d.r12mCdi != null ? `<div class="sub">CDI 12M: ${fmtR(d.r12mCdi)}%</div>` : ''}
+      ${d.r12mCdi != null ? \`<div class="sub">CDI 12M: \${fmtR(d.r12mCdi)}%</div>\` : ''}
     </div>
     <div class="sc">
       <div class="label">Retorno Máximo</div>
       <div class="val g">${d.rmax ? fmtR(d.rmax) + '%' : '—'}</div>
-      <div class="sub">${d.portfolioMonths ? `em ${d.portfolioMonths} meses` : 'histórico'}</div>
+      <div class="sub">${d.portfolioMonths ? \`em \${d.portfolioMonths} meses\` : 'histórico'}</div>
     </div>
     <div class="sc">
-      <div class="label">Projeção 2026</div>
-      <div class="val gold">${pj['Carteira RF'] ? fmtR(pj['Carteira RF'].p26) + '%' : '—'}</div>
+      <div class="label">Proj. RF Gross-up (26)</div>
+      <div class="val gold">${pj.eq['Carteira RF Gross-up'] ? fmtR(pj.eq['Carteira RF Gross-up'].p26) + '%' : '—'}</div>
     </div>
     <div class="sc">
-      <div class="label">Projeção 2027</div>
-      <div class="val">${pj['Carteira RF'] ? fmtR(pj['Carteira RF'].p27) + '%' : '—'}</div>
+      <div class="label">Proj. RF Gross-up (27)</div>
+      <div class="val">${pj.eq['Carteira RF Gross-up'] ? fmtR(pj.eq['Carteira RF Gross-up'].p27) + '%' : '—'}</div>
     </div>
   </div>
   
@@ -808,10 +800,10 @@ function renderDash(d) {
     
     let gu = '';
     if (v.hasExempt && v.taxaMediaEquivalente != null) {
-      gu = `<div class="exempt-badge">★ Equiv: ${fmtR(v.taxaMediaEquivalente)}%</div>`;
+      gu = `<div class="exempt-badge" style="margin-top:8px">★ Gross-up Equiv: ${fmtR(v.taxaMediaEquivalente)}%</div>`;
     }
     if (v.hasUnknownDeb) {
-      gu += `<div class="unknown-deb-badge">⚠ Debênture</div>`;
+      gu += `<div class="unknown-deb-badge" style="margin-top:4px">⚠ Contém Debêntures</div>`;
     }
     
     const card = document.createElement('div');
@@ -820,6 +812,7 @@ function renderDash(d) {
       <div>
         <div class="taxa-idx-name">${ICONS[k]} ${k}</div>
         <div class="taxa-rate-big" style="color:${COLORS[k] || '#fff'}">${v.displayRate ? fmtR(v.displayRate) + '%' : '—'}</div>
+        <div style="font-size:0.65rem; color:var(--muted); margin-top:2px">Taxa Média Original</div>
         ${gu}
       </div>
       <div class="taxa-alloc-lbl">
@@ -830,26 +823,39 @@ function renderDash(d) {
   });
   document.getElementById('tg').style.gridTemplateColumns = `repeat(${document.getElementById('tg').children.length}, 1fr)`;
 
-  activeSeriesSet = new Set(['Carteira RF', 'CDI', '% do CDI', 'CDI+', 'IPCA+', 'Pré']);
-  ['Carteira RF', 'CDI', 'IPCA+', 'Pré', '% do CDI', 'CDI+'].forEach(s => {
-    if (s !== 'Carteira RF' && s !== 'CDI' && !pj[s]) return;
+  const btnsData = [
+    { label: 'Carteira RF (Original)', key: 'Carteira RF (Original)', col: '#7bc44a' },
+    { label: 'Carteira RF (Gross-up)', key: 'Carteira RF (Gross-up)', col: '#d4a942' },
+    { label: 'CDI', key: 'CDI', col: '#3f8fd4' },
+    { label: 'IPCA+', key: 'IPCA+', col: COLORS['IPCA+'] },
+    { label: 'Pré', key: 'Pré', col: COLORS['Pré'] },
+    { label: '% do CDI', key: '% do CDI', col: COLORS['% do CDI'] },
+    { label: 'CDI+', key: 'CDI+', col: COLORS['CDI+'] }
+  ];
+
+  btnsData.forEach(item => {
+    if (item.key !== 'Carteira RF (Original)' && item.key !== 'Carteira RF (Gross-up)' && item.key !== 'CDI' && !pj.orig[item.key]) return;
+    
     const b = document.createElement('button');
-    b.className = 'series-btn act';
-    b.textContent = s;
-    b.style.color = COLORS[s] || '#7bc44a';
-    b.style.borderColor = COLORS[s] || '#7bc44a';
+    b.className = 'series-btn';
+    if (activeSeriesSet.has(item.key)) b.classList.add('act');
+    
+    b.textContent = item.label;
+    b.style.color = item.col;
+    b.style.borderColor = item.col;
     b.onclick = () => {
-      if (activeSeriesSet.has(s)) {
-        activeSeriesSet.delete(s);
+      if (activeSeriesSet.has(item.key)) {
+        activeSeriesSet.delete(item.key);
         b.classList.remove('act');
       } else {
-        activeSeriesSet.add(s);
+        activeSeriesSet.add(item.key);
         b.classList.add('act');
       }
       buildLineChart(projPeriod);
     };
     document.getElementById('sr').appendChild(b);
   });
+  
   buildLineChart(12);
 }
 
@@ -867,24 +873,24 @@ function openModal(nm, assets) {
             infStr = ` (Implícita B3: ${fmtR(((1 + tn / 100) / (1 + tr / 100) - 1) * 100)}%)`;
           }
         }
-        im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">Venc: ${m.toLocaleDateString('pt-BR')}${infStr}</div>`;
+        im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;">Venc: ${m.toLocaleDateString('pt-BR')}${infStr}</div>`;
       }
     } else if (a.vencimento) {
        const m = parseVencimento(a.vencimento);
-       if (m) im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">Venc: ${m.toLocaleDateString('pt-BR')}</div>`;
+       if (m) im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;">Venc: ${m.toLocaleDateString('pt-BR')}</div>`;
     }
     
     let eq = '';
     if (a.exempt && a.taxaEquivalente != null && Math.abs(a.taxaEquivalente - a.taxa) > 0.01) {
-      eq = `<div style="font-size:.65rem;color:#d4a942;margin-top:4px;">↳ Equiv: ${fmtR(a.taxaEquivalente)}%</div>`;
+      eq = `<div style="font-size:.65rem;color:#d4a942;margin-top:4px;">↳ Equiv. Tributável: ${fmtR(a.taxaEquivalente)}%</div>`;
     }
     
     let exemptTag = '';
-    if (a.exemptStatus === 'exempt') exemptTag = `<span class="exempt-tag">★ Isento</span>`;
-    if (a.exemptStatus === 'unknown_deb') exemptTag = `<span class="unknown-tag">⚠ Verif. Isenção</span>`;
+    if (a.exemptStatus === 'exempt') exemptTag = `<span class="exempt-tag" style="margin-left:6px">★ Isento</span>`;
+    if (a.exemptStatus === 'unknown_deb') exemptTag = `<span class="unknown-tag" style="margin-left:6px">⚠ Verif. Isenção</span>`;
 
     html += `<tr>
-      <td><strong>${a.ativo}</strong> ${exemptTag}${im}</td>
+      <td><strong>${a.ativo}</strong>${exemptTag}${im}</td>
       <td>${fmtM(a.valorBruto)}</td>
       <td style="color:${COLORS[nm]}; vertical-align:top; padding-top:10px;">${fmtR(a.taxa)}%${eq}</td>
     </tr>`;
@@ -892,7 +898,7 @@ function openModal(nm, assets) {
   
   let note = '';
   if (assets.some(a => a.exempt)) {
-     note = `<div class="modal-grossup-note">★ <strong>Cálculo do Gross-up:</strong> A taxa 'Equiv' visualizada nos ativos isentos já calcula o benefício fiscal da alíquota de IR utilizando o vértice exato de vencimento do título.</div>`;
+     note = `<div class="modal-grossup-note" style="margin-top:12px">★ <strong>Cálculo do Gross-up:</strong> A taxa 'Equiv. Tributável' visualizada nos ativos isentos já calcula o benefício fiscal considerando o vértice exato de vencimento de cada título na curva B3.</div>`;
   }
 
   document.getElementById('modalTitle').innerHTML = `<span style="color:${COLORS[nm]}">${nm}</span>`;
@@ -932,14 +938,17 @@ function buildLineChart(mths) {
     return d;
   };
   
-  const dts = [
-    { k: 'Carteira RF', c: '#7bc44a', d: pj['Carteira RF'] ? gD(pj['Carteira RF'].p26, pj['Carteira RF'].p27, pj['Carteira RF'].p28) : null, w: 2.5 },
+  const dtsRaw = [
+    { k: 'Carteira RF (Original)', c: '#7bc44a', d: pj.orig['Carteira RF'] ? gD(pj.orig['Carteira RF'].p26, pj.orig['Carteira RF'].p27, pj.orig['Carteira RF'].p28) : null, w: 2.5 },
+    { k: 'Carteira RF (Gross-up)', c: '#d4a942', d: pj.eq['Carteira RF Gross-up'] ? gD(pj.eq['Carteira RF Gross-up'].p26, pj.eq['Carteira RF Gross-up'].p27, pj.eq['Carteira RF Gross-up'].p28) : null, dash: [4, 4], w: 2.5 },
     { k: 'CDI', c: '#3f8fd4', d: gD(FOCUS.cdi26, FOCUS.cdi27, FOCUS.cdi28), dash: [6, 3], w: 1.5 },
-    { k: 'IPCA+', c: COLORS['IPCA+'], d: pj['IPCA+'] ? gD(pj['IPCA+'].p26, pj['IPCA+'].p27, pj['IPCA+'].p28) : null, dash: [4, 4], w: 1.5 },
-    { k: 'Pré', c: COLORS['Pré'], d: pj['Pré'] ? gD(pj['Pré'].p26, pj['Pré'].p27, pj['Pré'].p28) : null, dash: [4, 4], w: 1.5 },
-    { k: '% do CDI', c: COLORS['% do CDI'], d: pj['% do CDI'] ? gD(pj['% do CDI'].p26, pj['% do CDI'].p27, pj['% do CDI'].p28) : null, dash: [4, 4], w: 1.5 },
-    { k: 'CDI+', c: COLORS['CDI+'], d: pj['CDI+'] ? gD(pj['CDI+'].p26, pj['CDI+'].p27, pj['CDI+'].p28) : null, dash: [4, 4], w: 1.5 }
-  ].filter(x => x.d && activeSeriesSet.has(x.k));
+    { k: 'IPCA+', c: COLORS['IPCA+'], d: pj.orig['IPCA+'] ? gD(pj.orig['IPCA+'].p26, pj.orig['IPCA+'].p27, pj.orig['IPCA+'].p28) : null, dash: [4, 4], w: 1.5 },
+    { k: 'Pré', c: COLORS['Pré'], d: pj.orig['Pré'] ? gD(pj.orig['Pré'].p26, pj.orig['Pré'].p27, pj.orig['Pré'].p28) : null, dash: [4, 4], w: 1.5 },
+    { k: '% do CDI', c: COLORS['% do CDI'], d: pj.orig['% do CDI'] ? gD(pj.orig['% do CDI'].p26, pj.orig['% do CDI'].p27, pj.orig['% do CDI'].p28) : null, dash: [4, 4], w: 1.5 },
+    { k: 'CDI+', c: COLORS['CDI+'], d: pj.orig['CDI+'] ? gD(pj.orig['CDI+'].p26, pj.orig['CDI+'].p27, pj.orig['CDI+'].p28) : null, dash: [4, 4], w: 1.5 }
+  ];
+  
+  const dts = dtsRaw.filter(x => x.d && activeSeriesSet.has(x.k));
   
   charts.line = new Chart(document.getElementById('lc').getContext('2d'), {
     type: 'line',
@@ -965,7 +974,7 @@ function setPeriod(m) {
   buildLineChart(m);
 }
 
-// Inicializa a aplicação
+// Inicializa a aplicação buscando os dados do BCB e B3
 refreshFocus(true);
 </script>
 </body>
