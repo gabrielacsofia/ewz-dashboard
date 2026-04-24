@@ -1101,7 +1101,111 @@ function destroyCharts(){
   charts={};
 }
 
-refreshFocus(true);
-</script>
-</body>
-</html>
+async function refreshFocus(silent=false){
+  const dot = document.getElementById('focusDot');
+  const lbl = document.getElementById('focusLabel');
+  dot.className = 'focus-dot stale';
+  if (!silent) lbl.textContent = 'Atualizando...';
+
+  let focusOk = false;
+
+  // 1. FOCUS BCB - Consulta Blindada (Duas chamadas simples e rápidas)
+  try {
+    const baseUrl = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais";
+    
+    // Filtros ultra-leves codificados nativamente pelo navegador
+    const qIpca = encodeURI("?$filter=Indicador eq 'IPCA'&$orderby=Data desc&$top=40&$format=json");
+    const qSelic = encodeURI("?$filter=Indicador eq 'Selic'&$orderby=Data desc&$top=40&$format=json");
+
+    const ctrl = new AbortController();
+    const tmo  = setTimeout(() => ctrl.abort(), 12000);
+    
+    // Dispara as duas chamadas ao mesmo tempo para não travar o painel
+    const [resI, resS] = await Promise.all([
+      fetch(baseUrl + qIpca, {signal:ctrl.signal}),
+      fetch(baseUrl + qSelic, {signal:ctrl.signal})
+    ]);
+    clearTimeout(tmo);
+    
+    if (!resI.ok || !resS.ok) throw new Error('Servidor do BCB recusou a conexão.');
+    
+    const dataI = await resI.json();
+    const dataS = await resS.json();
+    
+    const iByYear = {}, sByYear = {};
+    
+    // Pega sempre a mediana mais recente do ano correspondente
+    (dataI.value || []).forEach(r => {
+      const ano = +r.DataReferencia;
+      if (iByYear[ano] == null) iByYear[ano] = r.Mediana;
+    });
+    (dataS.value || []).forEach(r => {
+      const ano = +r.DataReferencia;
+      if (sByYear[ano] == null) sByYear[ano] = r.Mediana;
+    });
+    
+    [2026,2027,2028].forEach(y => {
+      if (iByYear[y] != null) FOCUS['ipca'+String(y).slice(2)] = iByYear[y];
+      if (sByYear[y] != null) {
+        FOCUS['selic'+String(y).slice(2)] = sByYear[y];
+        FOCUS['cdi'  +String(y).slice(2)] = +(sByYear[y]-0.1).toFixed(2);
+      }
+    });
+    
+    FOCUS.lastUpdate = (dataI.value[0] || dataS.value[0])?.Data || null;
+    FOCUS.autoLoaded = true;
+    focusOk = !!FOCUS.lastUpdate;
+    
+  } catch(e) {
+    console.warn('[EWZ Focus]', e.message);
+    if (!silent) lbl.textContent = `Focus: API Offline (usando projeção fixa)`;
+  }
+
+  // 2. CDI SPOT — BCB SGS série 12
+  try {
+    const cdiCtrl = new AbortController();
+    const cdiTmo  = setTimeout(() => cdiCtrl.abort(), 8000);
+    const cdiRes  = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json', {signal:cdiCtrl.signal});
+    clearTimeout(cdiTmo);
+    const cdiJson = await cdiRes.json();
+    const cdiDia  = parseFloat(cdiJson[0].valor) / 100;
+    MARKET.cdiSpot = Math.pow(1 + cdiDia, 252) - 1;
+  } catch(e) {
+    MARKET.cdiSpot = null;
+  }
+
+  // 3. CURVAS DA B3 — Proxy Cloudflare
+  try {
+    const tdCtrl = new AbortController();
+    const tdTmo  = setTimeout(() => tdCtrl.abort(), 12000);
+    const workerUrl = 'https://proxy-tesouro-ewz.gabriela-sofia.workers.dev/';
+    
+    const tdRes  = await fetch(workerUrl, {signal:tdCtrl.signal});
+    clearTimeout(tdTmo);
+    
+    if (!tdRes.ok) throw new Error('HTTP Worker falhou');
+    const tdJson = await tdRes.json();
+    
+    if (tdJson.ipca && tdJson.pre) {
+         MARKET.curvaIpca = tdJson.ipca;
+         MARKET.curvaPre = tdJson.pre;
+         MARKET.curvesLoaded = (tdJson.ipca.length > 0 && tdJson.pre.length > 0);
+    }
+  } catch(e) {
+    MARKET.curvesLoaded = false;
+  }
+
+  const curvesMark = MARKET.curvesLoaded ? ' · Curvas B3 ✓' : '';
+  const cdiMark  = MARKET.cdiSpot != null ? ` · CDI ${fmtR(MARKET.cdiSpot*100,2)}%` : '';
+
+  if (focusOk) {
+    dot.className   = 'focus-dot';
+    lbl.textContent = 'Focus '+FOCUS.lastUpdate.slice(0,10)+cdiMark+curvesMark;
+  } else if (!silent) {
+    dot.className = 'focus-dot stale';
+    // Mostra que falhou, mas que a Curva da B3 ou o SGS podem ter carregado normal
+    if (lbl.textContent.startsWith('Atualizando')) lbl.textContent = 'Focus (Offline)'+cdiMark+curvesMark;
+  }
+
+  if (dashData) buildLineChart(projPeriod);
+}
