@@ -260,952 +260,246 @@
     <div class="modal-body" id="modalBody"></div>
   </div>
 </div>
-
 <script>
-// ─── FOCUS + MARKET DATA ────────────────────────────────────────────────────
-const FOCUS = {
-  ipca26:4.36, ipca27:3.85, ipca28:3.60,
-  selic26:12.50, selic27:10.50, selic28:10.00,
-  cdi26:12.40, cdi27:10.40, cdi28:9.90,
-  lastUpdate: null, autoLoaded: false
-};
+const FOCUS = { ipca26:4.36, ipca27:3.85, ipca28:3.60, selic26:12.50, selic27:10.50, selic28:10.00, cdi26:12.40, cdi27:10.40, cdi28:9.90, lastUpdate: null };
+const MARKET = { cdiSpot: null, curvaIpca: [], curvaPre: [], curvesLoaded: false, imp26: null, imp27: null, imp28: null };
+const COLORS = { 'Renda Fixa':'#7bc44a', 'IPCA+':'#d4a942','% do CDI':'#3f8fd4','CDI+':'#2563eb','Pré':'#e07d3d', 'Outros':'#334155' };
+const ICONS = {'IPCA+':'📈','% do CDI':'💹','CDI+':'💰','Pré':'🔐'};
 
-const MARKET = {
-  cdiSpot: null,
-  curvaIpca: [], 
-  curvaPre: [],  
-  curvesLoaded: false,
-  imp26: null,
-  imp27: null,
-  imp28: null
-};
+function irBracket(d) { return d<=180?0.225:d<=360?0.20:d<=720?0.175:0.15; }
+function parseVencimento(v) { if(!v)return null; if(v instanceof Date)return isNaN(v.getTime())?null:v; if(typeof v==='number'&&v>1000)return new Date((v-25569)*86400000); const d=new Date(v); return isNaN(d.getTime())?null:d; }
+function fmtR(n,d=2){ return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n); }
+function fmtM(n){ return 'R$ '+new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(n); }
 
-const COLORS = {
-  'Renda Fixa':'#7bc44a',
-  'IPCA+':'#d4a942','% do CDI':'#3f8fd4','CDI+':'#2563eb','Pré':'#e07d3d',
-  'IGP-M':'#8b5cf6','Alternativo':'#2dd4bf','Renda Variável':'#e84e7a',
-  'Multimercado':'#64748b','Previdência':'#a78bfa','Fundos':'#94a3b8',
-  'COE':'#2dd4bf','Outros':'#334155','CDI':'#3f8fd4'
-};
-const ICONS = {'IPCA+':'📈','% do CDI':'💹','CDI+':'💰','Pré':'🔐','IGP-M':'🏗️'};
-
-const IR_RATE = 0.15;
-
-function irBracket(calDays) {
-  if (calDays <= 180) return 0.225;
-  if (calDays <= 360) return 0.20;
-  if (calDays <= 720) return 0.175;
-  return 0.15;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. O CORAÇÃO DO CÁLCULO DE VÉRTICES DA B3
-// Esta função encontra a taxa exata para a data de vencimento específica do ativo
 function interpolarTaxa(curva, dataAlvo) {
-    if (!curva || curva.length === 0) return null;
-    const alvoTime = new Date(dataAlvo).getTime();
-
-    let verticeAnterior = curva[0];
-    let verticePosterior = curva[curva.length - 1];
-
-    if (alvoTime <= new Date(verticeAnterior.mtrtyDt).getTime()) return verticeAnterior.rate;
-    if (alvoTime >= new Date(verticePosterior.mtrtyDt).getTime()) return verticePosterior.rate;
-
-    for (let i = 0; i < curva.length - 1; i++) {
-        const t1 = new Date(curva[i].mtrtyDt).getTime();
-        const t2 = new Date(curva[i+1].mtrtyDt).getTime();
-
-        if (alvoTime >= t1 && alvoTime <= t2) {
-            verticeAnterior = curva[i];
-            verticePosterior = curva[i+1];
-            break;
-        }
+    if (!curva || !curva.length) return null;
+    const t = new Date(dataAlvo).getTime();
+    if (t <= new Date(curva[0].mtrtyDt).getTime()) return curva[0].rate;
+    if (t >= new Date(curva[curva.length-1].mtrtyDt).getTime()) return curva[curva.length-1].rate;
+    for (let i=0; i<curva.length-1; i++) {
+        const t1 = new Date(curva[i].mtrtyDt).getTime(), t2 = new Date(curva[i+1].mtrtyDt).getTime();
+        if (t >= t1 && t <= t2) return t1===t2 ? curva[i].rate : curva[i].rate + ((t-t1)/(t2-t1))*(curva[i+1].rate-curva[i].rate);
     }
-
-    const t1 = new Date(verticeAnterior.mtrtyDt).getTime();
-    const t2 = new Date(verticePosterior.mtrtyDt).getTime();
-    const y1 = verticeAnterior.rate;
-    const y2 = verticePosterior.rate;
-
-    if (t1 === t2) return y1;
-
-    return y1 + ((alvoTime - t1) / (t2 - t1)) * (y2 - y1);
+    return null;
 }
 
-function parseVencimento(v) {
-  if (!v) return null;
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  if (typeof v === 'number' && v > 1000) return new Date((v - 25569) * 86400000);
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d;
+function calcEquivPctCDI(pct, v) {
+  const m = parseVencimento(v), t = new Date();
+  if(!m||m<=t) return +(pct/(1-0.225)).toFixed(2);
+  const bd = Math.max(1, Math.round(((m.getTime()-t.getTime())/86400000)*252/365)), ir=irBracket((m.getTime()-t.getTime())/86400000);
+  const cdiS = MARKET.cdiSpot!=null ? MARKET.cdiSpot : FOCUS.cdi26/100;
+  const fvEx = Math.pow(1+(pct/100)*(Math.pow(1+cdiS,1/252)-1), bd);
+  const ann = Math.pow(1+(fvEx-1)/(1-ir), 252/bd)-1;
+  return cdiS>0 ? +(ann/cdiS*100).toFixed(2) : +(pct/(1-ir)).toFixed(2);
 }
 
-function calcEquivPctCDI(pctCDI, vencimento) {
-  const mat = parseVencimento(vencimento);
-  const today = new Date();
-  const cdiSpot = MARKET.cdiSpot != null ? MARKET.cdiSpot : FOCUS.cdi26 / 100;
-
-  if (!mat || mat <= today) return +(pctCDI / (1 - 0.225)).toFixed(2);
-
-  const calDays = Math.round((mat.getTime() - today.getTime()) / (24 * 3600 * 1000));
-  const bizDays = Math.max(1, Math.round(calDays * 252 / 365));
-  const ir      = irBracket(calDays);
-
-  const cdiDaily = Math.pow(1 + cdiSpot, 1 / 252) - 1;
-  const fvExempt = Math.pow(1 + (pctCDI / 100) * cdiDaily, bizDays);
-  const fvCDB   = 1 + (fvExempt - 1) / (1 - ir);
-  const annCDB  = Math.pow(fvCDB, 252 / bizDays) - 1;
-  
-  return cdiSpot > 0 ? +(annCDB / cdiSpot * 100).toFixed(2) : +(pctCDI / (1 - ir)).toFixed(2);
+function calcGrossUpSpreadIPCA(spread, v) {
+  const m = parseVencimento(v), to = new Date();
+  const ir = irBracket(m&&m>to ? (m.getTime()-to.getTime())/86400000 : 365);
+  if (!m || m<=to || !MARKET.curvesLoaded) return +((spread+FOCUS.ipca26*ir)/(1-ir)).toFixed(2);
+  const t = (m.getTime()-to.getTime())/(365.25*86400000);
+  if (t<0.1) return +((spread+FOCUS.ipca26*ir)/(1-ir)).toFixed(2);
+  const tR = interpolarTaxa(MARKET.curvaIpca, m), tN = interpolarTaxa(MARKET.curvaPre, m);
+  let aI = (tR!==null&&tN!==null) ? ((1+tN/100)/(1+tR/100))-1 : Math.pow(Math.pow(1+FOCUS.ipca26/100,Math.min(1,t)), 1/t)-1;
+  const fvC = 1 + (Math.pow(1+aI,t)*Math.pow(1+spread/100,t)-1)/(1-ir);
+  return +((Math.pow(fvC/Math.pow(1+aI,t), 1/t)-1)*100).toFixed(2);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. O GROSS-UP INDIVIDUAL POR VENCIMENTO
-// Aqui é onde o ativo longo é protegido e calculado usando a curva B3 real
-function calcGrossUpSpreadIPCA(spread, vencimento) {
-  const mat   = parseVencimento(vencimento);
-  const today = new Date();
-  const calDays = mat && mat > today ? Math.round((mat.getTime() - today.getTime()) / (24 * 3600 * 1000)) : 365;
-  const ir      = irBracket(calDays);
+function calcGrossUpCDIPlus(s, v){ const m=parseVencimento(v), t=new Date(); const ir=irBracket(m&&m>t?(m.getTime()-t.getTime())/86400000:730); return +((s+(FOCUS.cdi26||13)*ir)/(1-ir)).toFixed(2); }
+function calcGrossUpPre(r, v){ const m=parseVencimento(v), t=new Date(); return +(r/(1-irBracket(m&&m>t?(m.getTime()-t.getTime())/86400000:730))).toFixed(2); }
 
-  if (!mat || mat <= today || !MARKET.curvesLoaded) {
-    const spreadGU = (spread + FOCUS.ipca26 * ir) / (1 - ir);
-    return +spreadGU.toFixed(2);
-  }
-
-  const t = (mat.getTime() - today.getTime()) / (365.25 * 24 * 3600 * 1000);
-  if (t < 0.1) {
-    const spreadGU = (spread + FOCUS.ipca26 * ir) / (1 - ir);
-    return +spreadGU.toFixed(2);
-  }
-
-  // BUSCA DINÂMICA: Interpola as curvas Pré e IPCA exatamente para a data (ex: 2045)
-  const taxaReal = interpolarTaxa(MARKET.curvaIpca, mat);
-  const taxaNominal = interpolarTaxa(MARKET.curvaPre, mat);
-
-  let annIPCA;
-  if (taxaReal !== null && taxaNominal !== null) {
-      // EQUAÇÃO DE FISHER para a data exata
-      annIPCA = ((1 + taxaNominal / 100) / (1 + taxaReal / 100)) - 1;
-  } else {
-      let fvIPCA = 1.0, rem = t;
-      for (let y = today.getFullYear(); rem > 0.001; y++) {
-          const ipca = (y <= 2026 ? FOCUS.ipca26 : y === 2027 ? FOCUS.ipca27 : FOCUS.ipca28) / 100;
-          const frac = Math.min(1, rem);
-          fvIPCA *= Math.pow(1 + ipca, frac);
-          rem    -= frac;
-      }
-      annIPCA = Math.pow(fvIPCA, 1 / t) - 1;
-  }
-
-  const fvInflation = Math.pow(1 + annIPCA, t);
-  const fvReal      = Math.pow(1 + spread / 100, t);
-  const fvExempt    = fvInflation * fvReal;
-  const fvCDB       = 1 + (fvExempt - 1) / (1 - ir);
-  const spreadEq    = (Math.pow(fvCDB / fvInflation, 1 / t) - 1) * 100;
-  
-  return +spreadEq.toFixed(2);
+function getExemptStatus(a, p, ir) {
+  const irf = parseFloat(ir); if(!isNaN(irf)) return irf===0?'exempt':'taxable';
+  if(/^(cri|cra|lci|lca|lig)([\d\-_\s]|$)/i.test((a||'').trim()) || ['cri','cra','lci','lca','lig'].some(k=>(p||'').toLowerCase().startsWith(k))) return 'exempt';
+  if(/^deb/i.test(a||'') || /deben/i.test(p||'')) return 'unknown_deb'; return 'taxable';
 }
 
-function calcGrossUpCDIPlus(spread, vencimento) {
-  const mat = parseVencimento(vencimento);
-  const today = new Date();
-  const calDays = (mat && mat > today) ? Math.round((mat.getTime() - today.getTime()) / (24 * 3600 * 1000)) : 730; 
-  const ir  = irBracket(calDays);
-  const cdi = (FOCUS.cdi26 || 13);
-  return +((spread + cdi * ir) / (1 - ir)).toFixed(2);
-}
-
-function calcGrossUpPre(rate, vencimento) {
-  const mat = parseVencimento(vencimento);
-  const today = new Date();
-  const calDays = (mat && mat > today) ? Math.round((mat.getTime() - today.getTime()) / (24 * 3600 * 1000)) : 730;
-  const ir = irBracket(calDays);
-  return +(rate / (1 - ir)).toFixed(2);
-}
-
-function getExemptStatus(ativo, produto, irValue) {
-  const ir = parseFloat(irValue);
-  if (!isNaN(ir) && ir === 0) return 'exempt';
-  if (!isNaN(ir) && ir >  0) return 'taxable';
-  const a = (ativo  || '').toLowerCase().trim();
-  const p = (produto || '').toLowerCase();
-  if (/^(cri|cra|lci|lca|lig)([\d\-_\s]|$)/i.test((ativo || '').trim())) return 'exempt';
-  if (['cri','cra','lci','lca','lig'].some(k => p.startsWith(k))) return 'exempt';
-  if (/^deb/i.test(a) || /deben|debên/i.test(p)) return 'unknown_deb';
-  return 'taxable';
-}
-
-let dashData = null;
-let charts   = {};
-let projPeriod      = 12;
-let activeSeriesSet = new Set();
-let chartStartMonth = null;
-let chartStartYear  = null;
-
-function fmtR(n, d=2){ return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n); }
-function fmtM(n){ return 'R$ '+new Intl.NumberFormat('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n); }
-function ini(n){ return (n||'').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
-function pctOfCDI(rate26){ return FOCUS.cdi26>0?(rate26/FOCUS.cdi26*100).toFixed(1):null; }
+let dashData=null, charts={}, projPeriod=12, activeSeriesSet=new Set(), chartStartMonth=null, chartStartYear=null;
 
 function switchTab(t){
-  document.getElementById('tabUpload').classList.toggle('act', t==='upload');
-  document.getElementById('tabDash').classList.toggle('act',   t==='dash');
-  document.getElementById('tabBtnUpload').classList.toggle('act', t==='upload');
-  document.getElementById('tabBtnDash').classList.toggle('act',   t==='dash');
+  document.getElementById('tabUpload').classList.toggle('act', t==='upload'); document.getElementById('tabDash').classList.toggle('act', t==='dash');
+  document.getElementById('tabBtnUpload').classList.toggle('act', t==='upload'); document.getElementById('tabBtnDash').classList.toggle('act', t==='dash');
 }
 
 async function refreshFocus(silent=false){
-  const dot = document.getElementById('focusDot');
-  const lbl = document.getElementById('focusLabel');
-  dot.className = 'focus-dot stale';
-  if (!silent) lbl.textContent = 'Atualizando...';
-
-  let focusOk = false;
-
-  // 1. FOCUS BCB - Consulta Limpa e Segura
+  const dot=document.getElementById('focusDot'), lbl=document.getElementById('focusLabel'); dot.className='focus-dot stale'; if(!silent)lbl.textContent='Atualizando...';
+  let focusOk=false;
   try {
-    const bcbUrl = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais?$filter=Indicador%20eq%20%27IPCA%27%20or%20Indicador%20eq%20%27Selic%27&$orderby=Data%20desc&$top=150&$format=json";
-
-    const ctrl = new AbortController();
-    const tmo  = setTimeout(() => ctrl.abort(), 15000);
-    
-    const res = await fetch(bcbUrl, {signal:ctrl.signal});
-    clearTimeout(tmo);
-    
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    
-    const data = await res.json();
-    const rows = (data.value || []);
-    
-    const iByYear = {}, sByYear = {};
-    rows.forEach(r => {
-      const ano = +r.DataReferencia;
-      if (r.Indicador === 'IPCA' && iByYear[ano] == null) iByYear[ano] = r.Mediana;
-      if (r.Indicador === 'Selic' && sByYear[ano] == null) sByYear[ano] = r.Mediana;
-    });
-    
-    [2026,2027,2028].forEach(y => {
-      if (iByYear[y] != null) FOCUS['ipca'+String(y).slice(2)] = iByYear[y];
-      if (sByYear[y] != null) {
-        FOCUS['selic'+String(y).slice(2)] = sByYear[y];
-        FOCUS['cdi'  +String(y).slice(2)] = +(sByYear[y]-0.1).toFixed(2);
-      }
-    });
-    
-    FOCUS.lastUpdate = rows[0]?.Data || null;
-    FOCUS.autoLoaded = true;
-    focusOk = !!FOCUS.lastUpdate;
-    
-  } catch(e) {
-    if (!silent) lbl.textContent = `Focus: erro api`;
-  }
-
-  // 2. CDI SPOT — BCB SGS série 12
+    const base = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais";
+    const qI = encodeURI("?$filter=Indicador eq 'IPCA'&$orderby=Data desc&$top=40&$format=json");
+    const qS = encodeURI("?$filter=Indicador eq 'Selic'&$orderby=Data desc&$top=40&$format=json");
+    const ac = new AbortController(); const tm = setTimeout(()=>ac.abort(),12000);
+    const [rI, rS] = await Promise.all([fetch(base+qI,{signal:ac.signal}), fetch(base+qS,{signal:ac.signal})]);
+    clearTimeout(tm);
+    const dI=await rI.json(), dS=await rS.json();
+    const iy={}, sy={};
+    (dI.value||[]).forEach(r=>{ if(iy[+r.DataReferencia]==null) iy[+r.DataReferencia]=r.Mediana; });
+    (dS.value||[]).forEach(r=>{ if(sy[+r.DataReferencia]==null) sy[+r.DataReferencia]=r.Mediana; });
+    [2026,2027,2028].forEach(y=>{ if(iy[y]!=null)FOCUS['ipca'+String(y).slice(2)]=iy[y]; if(sy[y]!=null){FOCUS['selic'+String(y).slice(2)]=sy[y]; FOCUS['cdi'+String(y).slice(2)]=+(sy[y]-0.1).toFixed(2);} });
+    FOCUS.lastUpdate=(dI.value[0]||dS.value[0])?.Data||null; focusOk=!!FOCUS.lastUpdate;
+  } catch(e) { if(!silent)lbl.textContent=`Focus: Offline`; }
+  
   try {
-    const cdiCtrl = new AbortController();
-    const cdiTmo  = setTimeout(() => cdiCtrl.abort(), 10000);
-    const cdiRes  = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json', {signal:cdiCtrl.signal});
-    clearTimeout(cdiTmo);
-    const cdiJson = await cdiRes.json();
-    const cdiDia  = parseFloat(cdiJson[0].valor) / 100;
-    MARKET.cdiSpot = Math.pow(1 + cdiDia, 252) - 1;
-  } catch(e) {
-    MARKET.cdiSpot = null;
-  }
+    const ac = new AbortController(); const tm = setTimeout(()=>ac.abort(),8000);
+    const r = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json',{signal:ac.signal}); clearTimeout(tm);
+    MARKET.cdiSpot = Math.pow(1 + parseFloat((await r.json())[0].valor)/100, 252)-1;
+  } catch(e) { MARKET.cdiSpot=null; }
 
-  // 3. CURVAS DA B3 — Proxy Cloudflare
   try {
-    const tdCtrl = new AbortController();
-    const tdTmo  = setTimeout(() => tdCtrl.abort(), 15000);
-    const workerUrl = 'https://proxy-tesouro-ewz.gabriela-sofia.workers.dev/';
-    
-    const tdRes  = await fetch(workerUrl, {signal:tdCtrl.signal});
-    clearTimeout(tdTmo);
-    
-    if (!tdRes.ok) throw new Error('HTTP Worker falhou');
-    const tdJson = await tdRes.json();
-    
-    if (tdJson.ipca && tdJson.pre) {
-         MARKET.curvaIpca = tdJson.ipca;
-         MARKET.curvaPre = tdJson.pre;
-         MARKET.curvesLoaded = (tdJson.ipca.length > 0 && tdJson.pre.length > 0);
-    }
-  } catch(e) {
-    MARKET.curvesLoaded = false;
-  }
+    const ac = new AbortController(); const tm = setTimeout(()=>ac.abort(),12000);
+    const r = await fetch('https://proxy-tesouro-ewz.gabriela-sofia.workers.dev/',{signal:ac.signal}); clearTimeout(tm);
+    const d = await r.json(); if(d.ipca&&d.pre) { MARKET.curvaIpca=d.ipca; MARKET.curvaPre=d.pre; MARKET.curvesLoaded=(d.ipca.length>0&&d.pre.length>0); }
+  } catch(e) { MARKET.curvesLoaded=false; }
 
-  const curvesMark = MARKET.curvesLoaded ? ' · Curvas B3 ✓' : '';
-  const cdiMark  = MARKET.cdiSpot != null ? ` · CDI ${fmtR(MARKET.cdiSpot*100,2)}%` : '';
-
-  if (focusOk) {
-    dot.className   = 'focus-dot';
-    lbl.textContent = 'Focus '+FOCUS.lastUpdate.slice(0,10)+cdiMark+curvesMark;
-  } else if (!silent) {
-    dot.className = 'focus-dot stale';
-    if (lbl.textContent === 'Atualizando...') lbl.textContent = 'Focus: falhou'+cdiMark;
-  }
-
-  if (dashData) buildLineChart(projPeriod);
+  const cM = MARKET.curvesLoaded?' · B3 ✓':'', cdM = MARKET.cdiSpot!=null?` · CDI ${fmtR(MARKET.cdiSpot*100)}%`:'';
+  if(focusOk){ dot.className='focus-dot'; lbl.textContent='Focus '+(FOCUS.lastUpdate||'').slice(0,10)+cdM+cM; }
+  else if(!silent){ dot.className='focus-dot stale'; lbl.textContent='Focus (Offline)'+cdM+cM; }
+  if(dashData) buildLineChart(projPeriod);
 }
 
 function handleDragOver(e){ e.preventDefault(); document.getElementById('uploadZone').classList.add('drag'); }
 function handleDragLeave(e){ document.getElementById('uploadZone').classList.remove('drag'); }
-function handleDrop(e){
-  e.preventDefault();
-  document.getElementById('uploadZone').classList.remove('drag');
-  const f = e.dataTransfer.files[0];
-  if (f) processFile(f);
-}
-function handleFileSelect(e){
-  const f = e.target.files[0];
-  if (f) processFile(f);
-}
+function handleDrop(e){ e.preventDefault(); document.getElementById('uploadZone').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f)processFile(f); }
+function handleFileSelect(e){ const f=e.target.files[0]; if(f)processFile(f); e.target.value=''; } // CORREÇÃO FANTASMA
 
 function processFile(file){
   const reader = new FileReader();
   reader.onload = function(e){
     try {
-      const data = parseExcel(e.target.result);
-      dashData = data;
-      renderDash(data);
-      switchTab('dash');
-    } catch(err) {
-      alert('Erro ao processar a planilha: '+err.message);
-      console.error(err);
-    }
+      dashData = parseExcel(e.target.result); renderDash(dashData); switchTab('dash');
+    } catch(err) { alert('Erro: '+err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function parseExcel(arrayBuffer){
-  const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:false});
-  const required = ['Base','Resumo','Resultados'];
-  required.forEach(s=>{ if(!wb.Sheets[s]) throw new Error('Aba "'+s+'" não encontrada'); });
+function parseExcel(ab){
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  ['Base','Resumo','Resultados'].forEach(s=>{ if(!wb.Sheets[s]) throw new Error(`Aba "${s}" ausente`); });
+  const toA = n => wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null}) : [];
+  const base=toA('Base'), preR=toA('PRE'), pctR=toA('% do CDI'), cpR=toA('CDI+'), ipcaR=toA('IPCA'), res=toA('Resumo'), results=toA('Resultados');
+  const fRow = base.find((r,i)=>i>0&&r&&r[1]);
+  
+  const aIdx={}; [preR,pctR,cpR,ipcaR].forEach((ar,i)=>ar.forEach(r=>{if(r&&r[4])aIdx[r[4]]=['Pré','% do CDI','CDI+','IPCA+'][i];}));
+  const alloc={}, exc=['transit','garantia','lançamento futuro','lancamento futuro']; let tP=0, tRF=0;
+  
+  for(let i=1;i<base.length;i++){
+    const r=base[i]; if(!r)continue; const vb=parseFloat(r[13])||0; if(vb<=0)continue;
+    if(exc.some(k=>(r[5]||'').toLowerCase().includes(k)||(r[2]||'').toLowerCase().includes(k)||(r[4]||'').toLowerCase().includes(k)))continue;
+    let c = aIdx[r[4]]?'Renda Fixa':(r[2]||'Outros'); alloc[c]=(alloc[c]||0)+vb; tP+=vb;
+  } tRF=alloc['Renda Fixa']||0;
 
-  const toArr = (name) => wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null}) : [];
+  const rM={}; for(let i=1;i<res.length;i++)if(res[i]&&res[i][0]!=null)rM[String(res[i][0]).trim().toUpperCase()]=parseFloat(res[i][1]);
+  const rates = {'Pré':rM['PRÉ']??rM['PRE'], '% do CDI':rM['% DO CDI'], 'CDI+':rM['CDI+'], 'IPCA+':rM['IPCA+']};
 
-  const base    = toArr('Base');
-  const preRows = toArr('PRE');
-  const pctRows = toArr('% do CDI');
-  const cpRows  = toArr('CDI+');
-  const ipcaR   = toArr('IPCA');
-  const resumo  = toArr('Resumo');
-  const results = toArr('Resultados');
-
-  const firstRow   = base.find((r,i)=>i>0 && r && r[1]);
-  const clientName = firstRow ? String(firstRow[1]||'').trim() : '';
-  const clientCode = firstRow ? String(firstRow[0]||'').trim() : '';
-
-  const ativoIdx = {};
-  const mapRows  = (rows, idxName) => rows.forEach(r=>{ if(r && r[4]) ativoIdx[String(r[4])] = idxName; });
-  mapRows(preRows, 'Pré');
-  mapRows(pctRows, '% do CDI');
-  mapRows(cpRows,  'CDI+');
-  mapRows(ipcaR,   'IPCA+');
-
-  const alloc = {};
-  let totalPortfolio = 0, totalRF = 0;
-  const mercadoMap = {
-    'COE':'COE','Renda Variável':'Renda Variável','Fundos':'Fundos',
-    'Previdência':'Previdência','Multimercado':'Multimercado','Conta Corrente':null
-  };
-  const EXCL = ['transit','transito','trânsito','garantia','lançamento futuro','lancamento futuro','lançamentos futuros','lancamentos futuros'];
-
-  for (let i=1; i<base.length; i++){
-    const r = base[i];
-    if (!r) continue;
-    const vb          = parseFloat(r[13])||0;
-    if (vb <= 0) continue;
-    const mercado     = String(r[2]||'');
-    const ativo       = String(r[4]||'');
-    const prodLower   = String(r[5]||'').toLowerCase();
-    const mercadoLow  = mercado.toLowerCase();
-    let skip = false;
-    for (const kw of EXCL){ if(prodLower.includes(kw)||mercadoLow.includes(kw)||ativo.toLowerCase().includes(kw)){ skip=true; break; } }
-    if (skip) continue;
-
-    let cat;
-    if      (ativoIdx[ativo])                cat = 'Renda Fixa';
-    else if (mercadoMap[mercado] !== undefined) cat = mercadoMap[mercado];
-    else                                       cat = 'Outros';
-    if (!cat) continue;
-    alloc[cat] = (alloc[cat]||0) + vb;
-    totalPortfolio += vb;
-  }
-  totalRF = alloc['Renda Fixa'] || 0;
-
-  const rates = {};
-  for (let i=1; i<resumo.length; i++){
-    const r = resumo[i];
-    if (r && r[0]!=null && r[1]!=null){
-      rates[String(r[0]).trim().toUpperCase()] = parseFloat(r[1]);
-    }
-  }
-  const rateMap = {
-    'Pré':      rates['PRÉ']      ?? rates['PRE']      ?? null,
-    '% do CDI': rates['% DO CDI'] ?? null,
-    'CDI+':     rates['CDI+']     ?? null,
-    'IPCA+':    rates['IPCA+']    ?? null,
-  };
-
-  const r12m    = results[1] ? (parseFloat(results[1][1])||null) : null;
-  const r12mCdi = results[1] ? (parseFloat(results[1][2])||null) : null;
-  const rmax    = results[2] ? (parseFloat(results[2][1])||null) : null;
-  const rmaxCdi = results[2] ? (parseFloat(results[2][2])||null) : null;
-  const periodStr = results[3] ? String(results[3][1]||'') : '';
-
-  let portfolioMonths = null;
-  const pm = periodStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+até\s+(\d{2})\/(\d{2})\/(\d{4})/);
-  if (pm){
-    const d1 = new Date(+pm[3], +pm[2]-1, +pm[1]);
-    const d2 = new Date(+pm[6], +pm[5]-1, +pm[4]);
-    portfolioMonths = Math.round((d2.getTime()-d1.getTime())/(1000*60*60*24*30.44));
-  }
-
-  const buildIdx = (name, rows) => {
-    const total  = rows.reduce((s,r)=>{ if(!r||!r[13]) return s; const vb=parseFloat(r[13])||0; return s+(vb>0?vb:0); },0);
-    const wt     = totalRF > 0 ? (total/totalRF*100) : 0;
-    const rawRate = rateMap[name];
-    let displayRate = null;
-    if (name==='% do CDI' && rawRate!=null) displayRate = rawRate;
-    else if (rawRate!=null)                 displayRate = +(rawRate*100).toFixed(4);
-
+  const bIdx = (nm, rows) => {
+    const t = rows.reduce((s,r)=>s+((parseFloat(r?.[13])||0)>0?(parseFloat(r[13])||0):0),0), w = tRF>0?(t/tRF*100):0;
     const assets = rows.map(r=>{
-      if (!r||!r[4]) return null;
-      const vb = parseFloat(r[13])||0;
-      if (vb <= 0) return null;
-      const ativo        = String(r[4]||'');
-      const produto      = String(r[5]||'');
-      const emissor      = String(r[7]||'');
-      const exemptStatus = getExemptStatus(ativo, produto, r[14]);
-      const exempt       = exemptStatus === 'exempt';
-      const taxa         = parseFloat(r[10])||0;
-      const vencimento   = r[11]??null;
-
-      // CÁLCULO DE GROSS-UP PONDERADO (AQUI É ONDE ELE PASSA A DATA INDIVIDUAL DO SEU ATIVO LONGO!)
-      let taxaEquivalente = taxa;
-      if (exempt && taxa) {
-        if (name === '% do CDI') taxaEquivalente = calcEquivPctCDI(taxa, vencimento);
-        else if (name === 'IPCA+') taxaEquivalente = calcGrossUpSpreadIPCA(taxa, vencimento);
-        else if (name === 'CDI+') taxaEquivalente = calcGrossUpCDIPlus(taxa, vencimento);
-        else if (name === 'Pré') taxaEquivalente = calcGrossUpPre(taxa, vencimento);
-      }
-
-      return { ativo, produto, emissor, exemptStatus, valorBruto:vb, taxa, vencimento, exempt, taxaEquivalente };
+      if(!r||!r[4]||(parseFloat(r[13])||0)<=0)return null;
+      const a=r[4], p=r[5], ex=getExemptStatus(a,p,r[14]), tx=parseFloat(r[10])||0, ven=r[11]??null;
+      let te = tx; if(ex==='exempt'&&tx) te=nm==='% do CDI'?calcEquivPctCDI(tx,ven):nm==='IPCA+'?calcGrossUpSpreadIPCA(tx,ven):nm==='CDI+'?calcGrossUpCDIPlus(tx,ven):calcGrossUpPre(tx,ven);
+      return {ativo:a, exemptStatus:ex, valorBruto:parseFloat(r[13]), taxa:tx, vencimento:ven, exempt:ex==='exempt', taxaEquivalente:te};
     }).filter(Boolean);
-
-    let somaPonderadaEq = 0;
-    assets.forEach(a => { if (a.taxaEquivalente != null) somaPonderadaEq += (a.taxaEquivalente * a.valorBruto); });
-    const taxaMediaEquivalente = total > 0 ? (somaPonderadaEq / total) : null;
-
-    const exemptCount    = assets.filter(a=>a.exempt).length;
-    const hasExempt      = exemptCount > 0;
-    const hasUnknownDeb  = assets.filter(a=>a.exemptStatus==='unknown_deb').length > 0;
-
-    return { total, weight:wt, displayRate, taxaMediaEquivalente, assets, hasExempt, hasUnknownDeb };
+    let sEq=0; assets.forEach(a=>{if(a.taxaEquivalente!=null)sEq+=a.taxaEquivalente*a.valorBruto;});
+    return {total:t, weight:w, displayRate:rates[nm]!=null?(nm==='% do CDI'?rates[nm]:rates[nm]*100):null, taxaMediaEquivalente:t>0?sEq/t:null, assets:assets, hasExempt:assets.some(a=>a.exempt)};
   };
 
-  const rf_idx = {
-    '% do CDI': buildIdx('% do CDI', pctRows),
-    'CDI+':     buildIdx('CDI+',     cpRows),
-    'IPCA+':    buildIdx('IPCA+',    ipcaR),
-    'Pré':      buildIdx('Pré',      preRows),
-  };
-
-  return { clientName, clientCode, alloc, totalPortfolio, totalRF, rf_idx,
-           r12m:r12m?r12m*100:null, r12mCdi:r12mCdi?r12mCdi*100:null,
-           rmax:rmax?rmax*100:null, rmaxCdi:rmaxCdi?rmaxCdi*100:null,
-           periodStr, portfolioMonths };
+  const r12 = results[1]?.[1], r12c = results[1]?.[2], rx = results[2]?.[1], rxc = results[2]?.[2], pStr = String(results[3]?.[1]||'');
+  return {clientName:fRow?.[1], clientCode:fRow?.[0], alloc, totalPortfolio:tP, totalRF:tRF, rf_idx:{'% do CDI':bIdx('% do CDI',pctR),'CDI+':bIdx('CDI+',cpR),'IPCA+':bIdx('IPCA+',ipcaR),'Pré':bIdx('Pré',preR)}, r12m:r12?r12*100:null, r12mCdi:r12c?r12c*100:null, rmax:rx?rx*100:null, rmaxCdi:rxc?rxc*100:null, periodStr:pStr};
 }
 
 function calcProj(rf_idx){
-  const proj = {};
-  const F = FOCUS;
-  const { cdi26,cdi27,cdi28 } = F;
-
-  const getImplied = (year) => {
-     if (!MARKET.curvesLoaded) return F[`ipca${String(year).slice(2)}`];
-     const d = new Date(year, 11, 31);
-     const r = interpolarTaxa(MARKET.curvaIpca, d);
-     const n = interpolarTaxa(MARKET.curvaPre, d);
-     if (r !== null && n !== null) return (((1 + n/100) / (1 + r/100)) - 1) * 100;
-     return F[`ipca${String(year).slice(2)}`];
-  };
-
-  const imp26 = getImplied(2026);
-  const imp27 = getImplied(2027);
-  const imp28 = getImplied(2028);
-
-  MARKET.imp26 = imp26; MARKET.imp27 = imp27; MARKET.imp28 = imp28;
-
-  const v = rf_idx['% do CDI'];
-  if (v&&v.displayRate!=null) proj['% do CDI']={ p26:(v.displayRate/100)*cdi26, p27:(v.displayRate/100)*cdi27, p28:(v.displayRate/100)*cdi28 };
-
-  const c = rf_idx['CDI+'];
-  if (c&&c.displayRate!=null) proj['CDI+']={ p26:cdi26+c.displayRate, p27:cdi27+c.displayRate, p28:cdi28+c.displayRate };
-
-  const ip = rf_idx['IPCA+'];
-  if (ip&&ip.displayRate!=null) proj['IPCA+']={ p26:imp26+ip.displayRate, p27:imp27+ip.displayRate, p28:imp28+ip.displayRate };
-
-  const pr = rf_idx['Pré'];
-  if (pr&&pr.displayRate!=null) proj['Pré']={ p26:pr.displayRate, p27:pr.displayRate, p28:pr.displayRate };
-
-  let wp26=0,wp27=0,wp28=0,wt=0;
-  ['% do CDI','CDI+','IPCA+','Pré'].forEach(n=>{
-    const idx=rf_idx[n], p=proj[n];
-    if (!idx||!p||idx.weight<=0) return;
-    wp26+=idx.weight*p.p26; wp27+=idx.weight*p.p27; wp28+=idx.weight*p.p28; wt+=idx.weight;
-  });
-  if (wt>0) proj['Carteira RF'] = { p26:wp26/wt, p27:wp27/wt, p28:wp28/wt };
-  return proj;
+  const pj={}, F=FOCUS, {cdi26,cdi27,cdi28}=F;
+  const gI = (y) => { if(!MARKET.curvesLoaded)return F[`ipca${String(y).slice(2)}`]; const d=new Date(y,11,31), r=interpolarTaxa(MARKET.curvaIpca,d), n=interpolarTaxa(MARKET.curvaPre,d); return r!==null&&n!==null?((1+n/100)/(1+r/100)-1)*100:F[`ipca${String(y).slice(2)}`]; };
+  const i26=gI(2026), i27=gI(2027), i28=gI(2028); MARKET.imp26=i26; MARKET.imp27=i27; MARKET.imp28=i28;
+  const p=(nm,p26,p27,p28)=>{if(rf_idx[nm]?.displayRate!=null)pj[nm]={p26,p27,p28};};
+  if(rf_idx['% do CDI']?.displayRate!=null) p('% do CDI', (rf_idx['% do CDI'].displayRate/100)*cdi26, (rf_idx['% do CDI'].displayRate/100)*cdi27, (rf_idx['% do CDI'].displayRate/100)*cdi28);
+  if(rf_idx['CDI+']?.displayRate!=null) p('CDI+', cdi26+rf_idx['CDI+'].displayRate, cdi27+rf_idx['CDI+'].displayRate, cdi28+rf_idx['CDI+'].displayRate);
+  if(rf_idx['IPCA+']?.displayRate!=null) p('IPCA+', i26+rf_idx['IPCA+'].displayRate, i27+rf_idx['IPCA+'].displayRate, i28+rf_idx['IPCA+'].displayRate);
+  if(rf_idx['Pré']?.displayRate!=null) p('Pré', rf_idx['Pré'].displayRate, rf_idx['Pré'].displayRate, rf_idx['Pré'].displayRate);
+  
+  let w26=0,w27=0,w28=0,wt=0; ['% do CDI','CDI+','IPCA+','Pré'].forEach(n=>{const x=rf_idx[n], pr=pj[n]; if(x&&pr&&x.weight>0){w26+=x.weight*pr.p26; w27+=x.weight*pr.p27; w28+=x.weight*pr.p28; wt+=x.weight;}});
+  if(wt>0)pj['Carteira RF']={p26:w26/wt,p27:w27/wt,p28:w28/wt}; return pj;
 }
 
 function renderDash(d){
-  destroyCharts();
-  const _now = new Date();
-  chartStartMonth = _now.getMonth()+1;
-  chartStartYear  = _now.getFullYear();
-  document.getElementById('emptyState').style.display='none';
-  document.getElementById('dash').style.display='block';
-  document.getElementById('clientInfo').style.display='flex';
-  document.getElementById('clientAv').textContent=ini(d.clientName);
-  document.getElementById('clientNameEl').textContent=d.clientName||'—';
-  document.getElementById('clientCodeEl').textContent='Carteira: '+(d.clientCode||'—');
+  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}}); charts={};
+  const _n = new Date(); chartStartMonth = _n.getMonth()+1; chartStartYear = _n.getFullYear();
+  document.getElementById('emptyState').style.display='none'; document.getElementById('dash').style.display='block';
+  document.getElementById('clientInfo').style.display='flex'; document.getElementById('clientAv').textContent=(d.clientName||'?').slice(0,2).toUpperCase();
+  document.getElementById('clientNameEl').textContent=d.clientName||'—'; document.getElementById('clientCodeEl').textContent='Carteira: '+(d.clientCode||'—');
 
-  const rfPct   = d.totalPortfolio>0 ? (d.totalRF/d.totalPortfolio*100).toFixed(1) : '—';
-  const proj    = calcProj(d.rf_idx);
-  const p26     = proj['Carteira RF']?.p26||null;
-  const p27     = proj['Carteira RF']?.p27||null;
-  const pCDI26  = p26 ? pctOfCDI(p26) : null;
-  const pCDI27  = p27 ? (p27/FOCUS.cdi27*100).toFixed(1) : null;
-  const pCDI12m = d.r12m && d.r12mCdi ? (d.r12m/d.r12mCdi*100).toFixed(1) : null;
-
-  const allocSorted = Object.entries(d.alloc).filter(([,v])=>v>0.01)
-    .sort((a,b)=>b[1]-a[1]).map(([k,v])=>({k,v,w:d.totalPortfolio>0?v/d.totalPortfolio*100:0}));
-  const rfSorted = Object.entries(d.rf_idx).filter(([,v])=>v.total>0).sort((a,b)=>b[1].total-a[1].total);
-
-  let rmaxSub = d.portfolioMonths ? `em ${d.portfolioMonths} meses` : 'histórico';
-  let rmaxCdiLine = d.rmaxCdi!=null ? `<div class="sub">CDI do período: ${fmtR(d.rmaxCdi)}%</div>` : '';
-
-  const cdiSpotStr = MARKET.cdiSpot != null ? `SGS/BCB: ${fmtR(MARKET.cdiSpot*100,2)}% a.a.` : `Focus: ${FOCUS.cdi26}%`;
-  const ipcaStr = MARKET.curvesLoaded 
-      ? `<strong>Inflação Implícita das Curvas da B3:</strong> ${fmtR(MARKET.imp26)}% (2026) · ${fmtR(MARKET.imp27)}% (2027) · ${fmtR(MARKET.imp28)}% (2028). <span style="color:var(--muted)">(Boletim Focus: ${FOCUS.ipca26}%, ${FOCUS.ipca27}%, ${FOCUS.ipca28}%)</span>`
-      : `Boletim Focus: ${FOCUS.ipca26}% (2026) · ${FOCUS.ipca27}% (2027) · ${FOCUS.ipca28}% (2028).`;
-
+  const pj=calcProj(d.rf_idx), rfS=Object.entries(d.rf_idx).filter(([,v])=>v.total>0).sort((a,b)=>b[1].total-a[1].total);
+  const alS=Object.entries(d.alloc).filter(([,v])=>v>0.01).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({k,v,w:d.totalPortfolio>0?v/d.totalPortfolio*100:0}));
+  
   document.getElementById('dash').innerHTML=`
   <div class="strip">
-    <div class="sc hi">
-      <div class="label">Carteira Total</div>
-      <div class="val gold">${fmtM(d.totalPortfolio)}</div>
-      <div class="sub">Renda Fixa: ${fmtM(d.totalRF)} (${rfPct}%)</div>
-    </div>
-    <div class="sc">
-      <div class="label">Retorno 12M</div>
-      <div class="val g">${d.r12m!=null?fmtR(d.r12m)+'%':'—'}</div>
-      ${pCDI12m?`<div class="badge g">${pCDI12m}% do CDI</div>`:''}
-      ${d.r12mCdi!=null?`<div class="sub">CDI 12M: ${fmtR(d.r12mCdi)}%</div>`:''}
-    </div>
-    <div class="sc">
-      <div class="label">Retorno Máximo</div>
-      <div class="val g">${d.rmax!=null?fmtR(d.rmax)+'%':'—'}</div>
-      <div class="sub">${rmaxSub}</div>
-      ${rmaxCdiLine}
-    </div>
-    <div class="sc">
-      <div class="label">Projeção RF 2026</div>
-      <div class="val gold">${p26?fmtR(p26)+'% a.a.':'—'}</div>
-      ${pCDI26?`<div class="badge gold">${pCDI26}% do CDI</div>`:''}
-    </div>
-    <div class="sc">
-      <div class="label">Projeção RF 2027</div>
-      <div class="val">${p27?fmtR(p27)+'% a.a.':'—'}</div>
-      ${pCDI27?`<div class="badge gold">${pCDI27}% do CDI</div>`:''}
-    </div>
+    <div class="sc hi"><div class="label">Carteira</div><div class="val gold">${fmtM(d.totalPortfolio)}</div><div class="sub">RF: ${fmtM(d.totalRF)}</div></div>
+    <div class="sc"><div class="label">Ret. 12M</div><div class="val g">${d.r12m?fmtR(d.r12m)+'%':'—'}</div></div>
+    <div class="sc"><div class="label">Ret. Máx</div><div class="val g">${d.rmax?fmtR(d.rmax)+'%':'—'}</div></div>
+    <div class="sc"><div class="label">Proj 2026</div><div class="val gold">${pj['Carteira RF']?fmtR(pj['Carteira RF'].p26)+'%':'—'}</div></div>
+    <div class="sc"><div class="label">Proj 2027</div><div class="val">${pj['Carteira RF']?fmtR(pj['Carteira RF'].p27)+'%':'—'}</div></div>
   </div>
-
   <div class="g2">
-    <div class="panel">
-      <div class="phead"><div class="ptitle">Alocação Total da Carteira</div></div>
-      <div class="pie-wrap">
-        <div class="pie-c"><canvas id="pieFull"></canvas>
-          <div class="pie-center"><div class="pie-val">${allocSorted.length}</div><div class="pie-lbl">classes</div></div>
-        </div>
-        <div class="leg" id="legFull"></div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="phead"><div class="ptitle">Alocação Renda Fixa por Indexador</div></div>
-      <div class="pie-wrap">
-        <div class="pie-c"><canvas id="pieRF"></canvas>
-          <div class="pie-center"><div class="pie-val">${rfSorted.length}</div><div class="pie-lbl">indexadores</div></div>
-        </div>
-        <div class="leg" id="legRF"></div>
-      </div>
-    </div>
+    <div class="panel"><div class="phead"><div class="ptitle">Classes</div></div><div class="pie-wrap"><div class="pie-c"><canvas id="pf"></canvas></div><div class="leg" id="lf"></div></div></div>
+    <div class="panel"><div class="phead"><div class="ptitle">Renda Fixa</div></div><div class="pie-wrap"><div class="pie-c"><canvas id="pr"></canvas></div><div class="leg" id="lr"></div></div></div>
   </div>
+  <div class="gfull panel"><div class="phead"><div class="ptitle">Taxas</div></div><div class="taxa-grid" id="tg"></div></div>
+  <div class="gfull panel"><div class="phead"><div class="ptitle">Projeção (Juros Simples)</div><div class="toggle-btns"><button class="tbtn act" onclick="setPeriod(12)">12M</button><button class="tbtn" onclick="setPeriod(24)">24M</button><button class="tbtn" onclick="setPeriod(36)">36M</button></div></div>
+  <div class="chart-series-row" id="sr"></div><div class="chart-h" style="margin-top:14px"><canvas id="lc"></canvas></div></div>`;
 
-  <div class="gfull">
-    <div class="panel">
-      <div class="phead"><div class="ptitle">Taxas Médias Ponderadas · Renda Fixa</div><span style="font-size:.62rem;color:var(--muted2)">clique nos cards para ver os ativos e a matemática de gross-up</span></div>
-      <div class="taxa-grid" id="taxaGrid"></div>
-    </div>
-  </div>
+  charts.pf=new Chart(document.getElementById('pf').getContext('2d'),{type:'doughnut',data:{labels:alS.map(x=>x.k),datasets:[{data:alS.map(x=>x.w),backgroundColor:alS.map(x=>COLORS[x.k]||'#555')}]},options:{cutout:'64%',plugins:{legend:{display:false}}}});
+  alS.forEach(x=>document.getElementById('lf').innerHTML+=`<div class="leg-item"><div class="leg-dot" style="background:${COLORS[x.k]||'#555'}"></div><span class="leg-name">${x.k}</span><span class="leg-pct">${x.w.toFixed(1)}%</span></div>`);
+  
+  charts.pr=new Chart(document.getElementById('pr').getContext('2d'),{type:'doughnut',data:{labels:rfS.map(([k])=>k),datasets:[{data:rfS.map(([,v])=>v.weight),backgroundColor:rfS.map(([k])=>COLORS[k]||'#555')}]},options:{cutout:'64%',plugins:{legend:{display:false}}}});
+  rfS.forEach(([k,v])=>document.getElementById('lr').innerHTML+=`<div class="leg-item"><div class="leg-dot" style="background:${COLORS[k]||'#555'}"></div><span class="leg-name">${k}</span><span class="leg-pct">${v.weight.toFixed(1)}%</span></div>`);
 
-  <div class="gfull">
-    <div class="panel">
-      <div class="phead">
-        <div class="ptitle">Projeção de Rentabilidade · Renda Fixa vs CDI (Juros Simples)</div>
-        <div class="toggle-btns">
-          <button class="tbtn act" id="tb12" onclick="setPeriod(12)">12M</button>
-          <button class="tbtn" id="tb24" onclick="setPeriod(24)">24M</button>
-          <button class="tbtn" id="tb36" onclick="setPeriod(36)">36M</button>
-        </div>
-      </div>
-      <div class="chart-series-row" id="seriesRow"></div>
-      <div class="chart-h" style="margin-top:14px"><canvas id="lineChart"></canvas></div>
-      <div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap" id="lineleg"></div>
-    </div>
-  </div>
+  ['IPCA+','Pré','% do CDI','CDI+'].forEach(k=>{
+    const v=d.rf_idx[k]; if(!v||v.total<=0)return;
+    const gu=v.hasExempt&&v.taxaMediaEquivalente!=null?`<div class="exempt-badge">★ Equiv: ${fmtR(v.taxaMediaEquivalente)}%</div>`:'';
+    const card=document.createElement('div'); card.className='taxa-card';
+    card.innerHTML=`<div><div class="taxa-idx-name">${ICONS[k]} ${k}</div><div class="taxa-rate-big" style="color:${COLORS[k]||'#fff'}">${v.displayRate?fmtR(v.displayRate)+'%':'—'}</div>${gu}</div><div class="taxa-alloc-lbl">${v.weight.toFixed(1)}%</div>`;
+    card.onclick=()=>openModal(k,v.assets); document.getElementById('tg').appendChild(card);
+  }); document.getElementById('tg').style.gridTemplateColumns=`repeat(${document.getElementById('tg').children.length}, 1fr)`;
 
-  <div class="foot">
-    <span style="color:var(--gold);font-weight:600">INTELIGÊNCIA EWZ CAPITAL: Metodologia e Origem dos Dados</span><br>
-    ★ Projeções anuais do CDI via Boletim Focus: ${FOCUS.cdi26}% (2026) · ${FOCUS.cdi27}% (2027) · ${FOCUS.cdi28}% (2028).<br>
-    ★ Projeções IPCA via ${ipcaStr}<br>
-    ★ Gross-up % CDI isento: Equivalente financeiro de um CDB. Base diária atualizada via CDI Spot ${cdiSpotStr}.<br>
-    ★ Gross-up IPCA+ isento: Equação de Fisher cruzando as curvas B3 para a data de vencimento exata de cada ativo.
-  </div>
-  `;
-
-  const pfCtx=document.getElementById('pieFull').getContext('2d');
-  charts.pf=new Chart(pfCtx,{type:'doughnut',data:{labels:allocSorted.map(x=>x.k),datasets:[{data:allocSorted.map(x=>x.w),backgroundColor:allocSorted.map(x=>COLORS[x.k]||'#555'),borderColor:'#07160e',borderWidth:3}]},options:{cutout:'64%',plugins:{legend:{display:false}}}});
-  const lf=document.getElementById('legFull');
-  allocSorted.forEach(x=>{ lf.innerHTML+=`<div class="leg-item"><div class="leg-dot" style="background:${COLORS[x.k]||'#555'}"></div><span class="leg-name">${x.k}</span><span class="leg-val">${fmtM(x.v)}</span><span class="leg-pct">${x.w.toFixed(1)}%</span></div>`; });
-
-  const prCtx=document.getElementById('pieRF').getContext('2d');
-  charts.pr=new Chart(prCtx,{type:'doughnut',data:{labels:rfSorted.map(([k])=>k),datasets:[{data:rfSorted.map(([,v])=>v.weight),backgroundColor:rfSorted.map(([k])=>COLORS[k]||'#555'),borderColor:'#07160e',borderWidth:3}]},options:{cutout:'64%',plugins:{legend:{display:false}}}});
-  const lr=document.getElementById('legRF');
-  rfSorted.forEach(([k,v])=>{
-    let rateStr='—';
-    if (k==='% do CDI'&&v.displayRate!=null) rateStr=fmtR(v.displayRate,2)+'% CDI';
-    else if (k==='CDI+'&&v.displayRate!=null) rateStr='CDI+'+fmtR(v.displayRate,2)+'%';
-    else if ((k==='IPCA+'||k==='Pré')&&v.displayRate!=null) rateStr=fmtR(v.displayRate,2)+'%';
-    lr.innerHTML+=`<div class="leg-item"><div class="leg-dot" style="background:${COLORS[k]||'#555'}"></div><span class="leg-name">${k}</span><span class="leg-val">${rateStr}</span><span class="leg-pct">${v.weight.toFixed(1)}%</span></div>`;
-  });
-
-  buildTaxaCards(d.rf_idx, proj);
-  activeSeriesSet = new Set(['Carteira RF','CDI','% do CDI','CDI+','IPCA+','Pré']);
-  buildSeriesToggles(proj);
-  buildLineChart(12);
-}
-
-function buildTaxaCards(rf_idx, proj){
-  const tg = document.getElementById('taxaGrid');
-  const idxOrder = ['IPCA+','Pré','% do CDI','CDI+'];
-  let cardCount = 0;
-
-  idxOrder.forEach(k=>{
-    const v = rf_idx[k];
-    if (!v || v.total <= 0 || v.assets.length === 0) return;
-    cardCount++;
-    const col  = COLORS[k]||'#555';
-    const icon = ICONS[k]||'📊';
-    const projK = proj[k];
-
-    let rateBig='—', rateSub='';
-    if (k==='% do CDI'&&v.displayRate!=null){ rateBig=fmtR(v.displayRate,2)+'% do CDI'; rateSub='% médio ponderado original'; }
-    else if (k==='CDI+'&&v.displayRate!=null){ rateBig='CDI + '+fmtR(v.displayRate,2)+'%'; rateSub='spread médio ponderado original'; }
-    else if (k==='IPCA+'&&v.displayRate!=null){ rateBig='IPCA + '+fmtR(v.displayRate,2)+'%'; rateSub='spread médio ponderado original'; }
-    else if (k==='Pré'&&v.displayRate!=null){ rateBig=fmtR(v.displayRate,2)+'% a.a.'; rateSub='taxa média ponderada original'; }
-
-    let grossUpHtml = '';
-    if (v.hasExempt && v.taxaMediaEquivalente != null) {
-      let guStr = (k === '% do CDI') ? `${fmtR(v.taxaMediaEquivalente, 1)}% CDI equiv.` 
-                : (k === 'IPCA+') ? `IPCA + ${fmtR(v.taxaMediaEquivalente, 2)}% equiv.` 
-                : (k === 'CDI+') ? `CDI + ${fmtR(v.taxaMediaEquivalente, 2)}% equiv.` 
-                : `${fmtR(v.taxaMediaEquivalente, 2)}% a.a. equiv.`;
-      grossUpHtml = `<div class="exempt-badge">★ Benefício Fiscal Diluído · ${guStr}</div>`;
-    }
-    if (v.hasUnknownDeb) grossUpHtml += `<div class="unknown-deb-badge">⚠ Debênture: verificar isenção</div>`;
-
-    const card = document.createElement('div');
-    card.className = 'taxa-card';
-    card.innerHTML = `
-      <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${col}"></div>
-      <div class="taxa-card-left">
-        <div class="taxa-idx-name">${icon} ${k}</div>
-        <div class="taxa-rate-big" style="color:${col}">${rateBig}</div>
-        <div class="taxa-rate-sub">${rateSub}</div>
-        ${grossUpHtml}
-        <div class="taxa-row">
-          <div class="taxa-proj"><div class="taxa-proj-lbl">Proj. 2026</div><div class="taxa-proj-val" style="color:${col}">${projK?.p26?fmtR(projK.p26)+'% a.a.':'—'}</div></div>
-          <div class="taxa-proj"><div class="taxa-proj-lbl">Proj. 2027</div><div class="taxa-proj-val" style="color:${col}">${projK?.p27?fmtR(projK.p27)+'% a.a.':'—'}</div></div>
-        </div>
-      </div>
-      <div class="taxa-card-right">
-        <div class="taxa-alloc-lbl">Alocação RF</div>
-        <div class="taxa-alloc-val" style="color:${col}">${v.weight.toFixed(1)}%</div>
-        <div class="taxa-weight-bar"><div class="taxa-weight-fill" style="width:${Math.min(v.weight,100)}%;background:${col}"></div></div>
-      </div>`;
-    card.addEventListener('click', ()=>openModal(k, v.assets, v.displayRate));
-    tg.appendChild(card);
-  });
-  if (cardCount > 0) tg.style.gridTemplateColumns = `repeat(${cardCount}, 1fr)`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 3. A TRANSPARÊNCIA DO MODAL
-// Agora mostra ao cliente o cálculo equivalente individual E a inflação implícita do vértice
-function openModal(idxName, assets, displayRate){
-  const col = COLORS[idxName]||'#555';
-  let rows = '';
-  let hasAnyExempt = false;
-
-  assets.sort((a,b)=>b.valorBruto-a.valorBruto).forEach(a=>{
-    if (a.exempt) hasAnyExempt = true;
-
-    let exemptTag = '';
-    if (a.exemptStatus==='exempt') exemptTag = `<span class="exempt-tag" style="margin-left:8px">★ Isento IR</span>`;
-    else if (a.exemptStatus==='unknown_deb') exemptTag = `<span class="unknown-tag" style="margin-left:8px">⚠ Verificar Isenção</span>`;
-
-    // Matemática Visível: Mostra a inflação implícita e a data de vencimento
-    let implInfStr = '';
-    if (idxName === 'IPCA+' && a.vencimento) {
-         const mat = parseVencimento(a.vencimento);
-         if (mat && mat > new Date() && MARKET.curvesLoaded) {
-             const tReal = interpolarTaxa(MARKET.curvaIpca, mat);
-             const tNom = interpolarTaxa(MARKET.curvaPre, mat);
-             if (tReal !== null && tNom !== null) {
-                 const inf = (((1 + tNom/100) / (1 + tReal/100)) - 1) * 100;
-                 implInfStr = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;font-weight:400">Vencimento: ${mat.toLocaleDateString('pt-BR')} (Inflação implícita B3 p/ vértice: ${fmtR(inf,2)}%)</div>`;
-             }
-         } else if (mat) {
-             implInfStr = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;font-weight:400">Vencimento: ${mat.toLocaleDateString('pt-BR')}</div>`;
-         }
-    } else if (a.vencimento) {
-         const mat = parseVencimento(a.vencimento);
-         if (mat) implInfStr = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;font-weight:400">Vencimento: ${mat.toLocaleDateString('pt-BR')}</div>`;
-    }
-
-    // String da Taxa Original
-    let txStr = (idxName === '% do CDI') ? fmtR(a.taxa, 2) + '% CDI'
-              : (idxName === 'CDI+')     ? 'CDI+' + fmtR(a.taxa, 2) + '%'
-              : (idxName === 'IPCA+')    ? 'IPCA+' + fmtR(a.taxa, 2) + '%'
-              : fmtR(a.taxa, 2) + '% a.a.';
-
-    // String da Taxa Gross-up Equivalente Individual
-    let equivStr = '';
-    if (a.exempt && a.taxaEquivalente != null && Math.abs(a.taxaEquivalente - a.taxa) > 0.01) {
-        let eqVal = fmtR(a.taxaEquivalente, 2);
-        if (idxName === '% do CDI') equivStr = `<div style="font-size:0.65rem;color:#d4a942;margin-top:4px">↳ Equiv. tributável: ${eqVal}% CDI</div>`;
-        else if (idxName === 'IPCA+') equivStr = `<div style="font-size:0.65rem;color:#d4a942;margin-top:4px">↳ Equiv. tributável: IPCA+ ${eqVal}%</div>`;
-        else if (idxName === 'CDI+') equivStr = `<div style="font-size:0.65rem;color:#d4a942;margin-top:4px">↳ Equiv. tributável: CDI+ ${eqVal}%</div>`;
-        else equivStr = `<div style="font-size:0.65rem;color:#d4a942;margin-top:4px">↳ Equiv. tributável: ${eqVal}% a.a.</div>`;
-    }
-
-    rows += `<tr>
-      <td><strong>${a.ativo}</strong>${exemptTag}${implInfStr}</td>
-      <td>${fmtM(a.valorBruto)}</td>
-      <td style="color:${col}; vertical-align:top; padding-top:12px">${txStr}${equivStr}</td>
-    </tr>`;
-  });
-
-  let grossUpNote = '';
-  if (hasAnyExempt) {
-    const dataSource = idxName === '% do CDI' 
-      ? (MARKET.cdiSpot != null ? 'CDI Spot diário do BCB' : 'Boletim Focus')
-      : (MARKET.curvesLoaded ? 'cruzamento exato das Curvas Pré e IPCA+ da B3 para a data de vencimento' : 'Boletim Focus');
-      
-    grossUpNote = `<div class="modal-grossup-note" style="margin-top:12px">★ <strong>Cálculo do Gross-up:</strong> A taxa 'Equiv. tributável' visualizada nos ativos isentos já calcula o benefício fiscal da alíquota de IR regressiva utilizando o ${dataSource}.</div>`;
-  }
-
-  document.getElementById('modalTitle').innerHTML=`<span style="color:${col}">${idxName}</span> — Detalhamento de Posições`;
-  document.getElementById('modalBody').innerHTML=`<table class="asset-table"><tbody>${rows}</tbody></table>${grossUpNote}`;
-  document.getElementById('assetModal').style.display='flex';
-}
-
-function closeModal(){ document.getElementById('assetModal').style.display='none'; }
-function handleModalClick(e){ if(e.target===e.currentTarget||e.target.classList.contains('modal-backdrop')) closeModal(); }
-
-function buildSeriesToggles(proj){
-  const row = document.getElementById('seriesRow');
-  if (!row) return;
-  row.innerHTML = '';
+  activeSeriesSet=new Set(['Carteira RF','CDI','% do CDI','CDI+','IPCA+','Pré']);
   ['Carteira RF','CDI','IPCA+','Pré','% do CDI','CDI+'].forEach(s=>{
-    if (s!=='Carteira RF'&&s!=='CDI'&&!proj[s]) return;
-    const col = s==='Carteira RF'?'#7bc44a':(COLORS[s]||'#555');
-    const btn = document.createElement('button');
-    btn.className='series-btn act'; btn.textContent=s;
-    btn.style.borderColor=col; btn.style.color=col;
-    btn.onclick=()=>toggleSeries(s,btn,col);
-    row.appendChild(btn);
-  });
+    if(s!=='Carteira RF'&&s!=='CDI'&&!pj[s])return; const b=document.createElement('button'); b.className='series-btn act'; b.textContent=s;
+    b.style.color=COLORS[s]||'#7bc44a'; b.onclick=()=>{activeSeriesSet.has(s)?(activeSeriesSet.delete(s),b.classList.remove('act')):(activeSeriesSet.add(s),b.classList.add('act')); buildLineChart(projPeriod);}; document.getElementById('sr').appendChild(b);
+  }); buildLineChart(12);
 }
 
-function toggleSeries(s,btn,col){
-  if (activeSeriesSet.has(s)){ activeSeriesSet.delete(s); btn.classList.remove('act'); }
-  else { activeSeriesSet.add(s); btn.classList.add('act'); }
-  buildLineChart(projPeriod);
+function openModal(nm, assets){
+  let html=''; assets.sort((a,b)=>b.valorBruto-a.valorBruto).forEach(a=>{
+    let im=''; if(nm==='IPCA+'&&a.vencimento){ const m=parseVencimento(a.vencimento); if(m){
+      let infStr=''; if(MARKET.curvesLoaded&&m>new Date()){const tr=interpolarTaxa(MARKET.curvaIpca,m),tn=interpolarTaxa(MARKET.curvaPre,m); if(tr&&tn)infStr=` (Implícita B3: ${fmtR(((1+tn/100)/(1+tr/100)-1)*100)}%)`;}
+      im=`<div style="font-size:0.6rem;color:var(--muted)">Venc: ${m.toLocaleDateString('pt-BR')}${infStr}</div>`;
+    }}
+    let eq=''; if(a.exempt&&a.taxaEquivalente&&Math.abs(a.taxaEquivalente-a.taxa)>0.01) eq=`<div style="font-size:.65rem;color:#d4a942">↳ Equiv: ${fmtR(a.taxaEquivalente)}%</div>`;
+    html+=`<tr><td><strong>${a.ativo}</strong>${a.exempt?'<span class="exempt-tag">★ Isento</span>':''}${im}</td><td>${fmtM(a.valorBruto)}</td><td style="color:${COLORS[nm]}">${fmtR(a.taxa)}%${eq}</td></tr>`;
+  });
+  document.getElementById('modalTitle').innerHTML=`<span style="color:${COLORS[nm]}">${nm}</span>`; document.getElementById('modalBody').innerHTML=`<table class="asset-table">${html}</table>`; document.getElementById('assetModal').style.display='flex';
+}
+function closeModal(){document.getElementById('assetModal').style.display='none';}
+
+function buildLineChart(mths){
+  if(charts.line)charts.line.destroy(); const pj=calcProj(dashData.rf_idx), lbls=[];
+  for(let m=0;m<=mths;m++){ const t=(chartStartYear-2000)*12+(chartStartMonth-1)+m; lbls.push(['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][t%12]+'/'+String(2000+Math.floor(t/12)).slice(2)); }
+  const gD=(p26,p27,p28)=>{ const d=[100]; let c=100; for(let m=1;m<=mths;m++){const y=2000+Math.floor(((chartStartYear-2000)*12+(chartStartMonth-1)+m)/12); c+=100*(((y<=2026?p26:y===2027?p27:p28)/100)/12); d.push(c);} return d; }; // JUROS SIMPLES DA EWZ
+  const dts = [{k:'Carteira RF',c:'#7bc44a',d:pj['Carteira RF']?gD(pj['Carteira RF'].p26,pj['Carteira RF'].p27,pj['Carteira RF'].p28):null},{k:'CDI',c:'#3f8fd4',d:gD(FOCUS.cdi26,FOCUS.cdi27,FOCUS.cdi28)},{k:'IPCA+',c:COLORS['IPCA+'],d:pj['IPCA+']?gD(pj['IPCA+'].p26,pj['IPCA+'].p27,pj['IPCA+'].p28):null},{k:'Pré',c:COLORS['Pré'],d:pj['Pré']?gD(pj['Pré'].p26,pj['Pré'].p27,pj['Pré'].p28):null},{k:'% do CDI',c:COLORS['% do CDI'],d:pj['% do CDI']?gD(pj['% do CDI'].p26,pj['% do CDI'].p27,pj['% do CDI'].p28):null},{k:'CDI+',c:COLORS['CDI+'],d:pj['CDI+']?gD(pj['CDI+'].p26,pj['CDI+'].p27,pj['CDI+'].p28):null}].filter(x=>x.d&&activeSeriesSet.has(x.k));
+  charts.line=new Chart(document.getElementById('lc').getContext('2d'),{type:'line',data:{labels:lbls,datasets:dts.map(x=>({label:x.k,data:x.d,borderColor:x.c,pointRadius:0,tension:0.3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
 }
 
 function setPeriod(m){
   projPeriod=m;
-  [12,24,36].forEach(v=>{ document.getElementById('tb'+v)?.classList.toggle('act',v===m); });
+  const btns = document.querySelectorAll('.toggle-btns .tbtn');
+  btns.forEach(b => {
+    b.classList.remove('act');
+    if (b.textContent === m + 'M') b.classList.add('act');
+  });
   buildLineChart(m);
 }
 
-function monthYearAtOffset(bm, by, off){ const t = (by-2000)*12+(bm-1)+off; return { month:(t%12)+1, year:2000+Math.floor(t/12) }; }
-
-function genProjection(p26,p27,p28,months){
-  const data=[100];
-  const sm = chartStartMonth||(new Date().getMonth()+1);
-  const sy = chartStartYear ||new Date().getFullYear();
-  let cc = 100;
-  for (let m=1;m<=months;m++){
-    const {year} = monthYearAtOffset(sm,sy,m);
-    const rate   = year<=2026?p26:year===2027?p27:p28;
-    cc += 100 * ((rate/100)/12); // JUROS SIMPLES DA EWZ
-    data.push(parseFloat(cc.toFixed(4)));
-  }
-  return data;
-}
-
-function buildLineChart(months){
-  if (!dashData) return;
-  if (charts.line) try{charts.line.destroy();}catch(e){}
-  const ctx = document.getElementById('lineChart');
-  const proj = calcProj(dashData.rf_idx);
-  const labels = [];
-  const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const sm=chartStartMonth||(new Date().getMonth()+1);
-  const sy=chartStartYear ||new Date().getFullYear();
-  for (let m=0;m<=months;m++){ const {month,year}=monthYearAtOffset(sm,sy,m); labels.push(MN[month-1]+'/'+String(year).slice(2)); }
-
-  const allDs = [
-    {key:'Carteira RF',label:'Carteira RF',color:'#7bc44a',data:proj['Carteira RF']?genProjection(proj['Carteira RF'].p26,proj['Carteira RF'].p27,proj['Carteira RF'].p28,months):null},
-    {key:'CDI',label:'CDI',color:'#3f8fd4',data:genProjection(FOCUS.cdi26,FOCUS.cdi27,FOCUS.cdi28,months), dash:[6,3]},
-    {key:'IPCA+',label:'IPCA+',color:COLORS['IPCA+'],data:proj['IPCA+']?genProjection(proj['IPCA+'].p26,proj['IPCA+'].p27,proj['IPCA+'].p28,months):null, dash:[4,4]},
-    {key:'Pré',label:'Pré',color:COLORS['Pré'],data:proj['Pré']?genProjection(proj['Pré'].p26,proj['Pré'].p27,proj['Pré'].p28,months):null, dash:[4,4]},
-    {key:'% do CDI',label:'% do CDI',color:COLORS['% do CDI'],data:proj['% do CDI']?genProjection(proj['% do CDI'].p26,proj['% do CDI'].p27,proj['% do CDI'].p28,months):null, dash:[4,4]},
-    {key:'CDI+',label:'CDI+',color:COLORS['CDI+'],data:proj['CDI+']?genProjection(proj['CDI+'].p26,proj['CDI+'].p27,proj['CDI+'].p28,months):null, dash:[4,4]},
-  ].filter(ds=>ds.data&&activeSeriesSet.has(ds.key));
-
-  charts.line=new Chart(ctx.getContext('2d'),{
-    type:'line',data:{labels,datasets:allDs.map(ds=>({label:ds.label, data:ds.data, borderColor:ds.color, borderWidth:ds.key==='Carteira RF'?2.5:1.5, borderDash:ds.dash, pointRadius:0, tension:0.3}))},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{color:'rgba(28,61,32,0.3)'}},y:{grid:{color:'rgba(28,61,32,0.3)'},callback:v=>'+'+(v-100).toFixed(1)+'%'}} }
-  });
-}
-
-function destroyCharts(){
-  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});
-  charts={};
-}
-
-async function refreshFocus(silent=false){
-  const dot = document.getElementById('focusDot');
-  const lbl = document.getElementById('focusLabel');
-  dot.className = 'focus-dot stale';
-  if (!silent) lbl.textContent = 'Atualizando...';
-
-  let focusOk = false;
-
-  // 1. FOCUS BCB - Consulta Blindada (Duas chamadas simples e rápidas)
-  try {
-    const baseUrl = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais";
-    
-    // Filtros ultra-leves codificados nativamente pelo navegador
-    const qIpca = encodeURI("?$filter=Indicador eq 'IPCA'&$orderby=Data desc&$top=40&$format=json");
-    const qSelic = encodeURI("?$filter=Indicador eq 'Selic'&$orderby=Data desc&$top=40&$format=json");
-
-    const ctrl = new AbortController();
-    const tmo  = setTimeout(() => ctrl.abort(), 12000);
-    
-    // Dispara as duas chamadas ao mesmo tempo para não travar o painel
-    const [resI, resS] = await Promise.all([
-      fetch(baseUrl + qIpca, {signal:ctrl.signal}),
-      fetch(baseUrl + qSelic, {signal:ctrl.signal})
-    ]);
-    clearTimeout(tmo);
-    
-    if (!resI.ok || !resS.ok) throw new Error('Servidor do BCB recusou a conexão.');
-    
-    const dataI = await resI.json();
-    const dataS = await resS.json();
-    
-    const iByYear = {}, sByYear = {};
-    
-    // Pega sempre a mediana mais recente do ano correspondente
-    (dataI.value || []).forEach(r => {
-      const ano = +r.DataReferencia;
-      if (iByYear[ano] == null) iByYear[ano] = r.Mediana;
-    });
-    (dataS.value || []).forEach(r => {
-      const ano = +r.DataReferencia;
-      if (sByYear[ano] == null) sByYear[ano] = r.Mediana;
-    });
-    
-    [2026,2027,2028].forEach(y => {
-      if (iByYear[y] != null) FOCUS['ipca'+String(y).slice(2)] = iByYear[y];
-      if (sByYear[y] != null) {
-        FOCUS['selic'+String(y).slice(2)] = sByYear[y];
-        FOCUS['cdi'  +String(y).slice(2)] = +(sByYear[y]-0.1).toFixed(2);
-      }
-    });
-    
-    FOCUS.lastUpdate = (dataI.value[0] || dataS.value[0])?.Data || null;
-    FOCUS.autoLoaded = true;
-    focusOk = !!FOCUS.lastUpdate;
-    
-  } catch(e) {
-    console.warn('[EWZ Focus]', e.message);
-    if (!silent) lbl.textContent = `Focus: API Offline (usando projeção fixa)`;
-  }
-
-  // 2. CDI SPOT — BCB SGS série 12
-  try {
-    const cdiCtrl = new AbortController();
-    const cdiTmo  = setTimeout(() => cdiCtrl.abort(), 8000);
-    const cdiRes  = await fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados/ultimos/1?formato=json', {signal:cdiCtrl.signal});
-    clearTimeout(cdiTmo);
-    const cdiJson = await cdiRes.json();
-    const cdiDia  = parseFloat(cdiJson[0].valor) / 100;
-    MARKET.cdiSpot = Math.pow(1 + cdiDia, 252) - 1;
-  } catch(e) {
-    MARKET.cdiSpot = null;
-  }
-
-  // 3. CURVAS DA B3 — Proxy Cloudflare
-  try {
-    const tdCtrl = new AbortController();
-    const tdTmo  = setTimeout(() => tdCtrl.abort(), 12000);
-    const workerUrl = 'https://proxy-tesouro-ewz.gabriela-sofia.workers.dev/';
-    
-    const tdRes  = await fetch(workerUrl, {signal:tdCtrl.signal});
-    clearTimeout(tdTmo);
-    
-    if (!tdRes.ok) throw new Error('HTTP Worker falhou');
-    const tdJson = await tdRes.json();
-    
-    if (tdJson.ipca && tdJson.pre) {
-         MARKET.curvaIpca = tdJson.ipca;
-         MARKET.curvaPre = tdJson.pre;
-         MARKET.curvesLoaded = (tdJson.ipca.length > 0 && tdJson.pre.length > 0);
-    }
-  } catch(e) {
-    MARKET.curvesLoaded = false;
-  }
-
-  const curvesMark = MARKET.curvesLoaded ? ' · Curvas B3 ✓' : '';
-  const cdiMark  = MARKET.cdiSpot != null ? ` · CDI ${fmtR(MARKET.cdiSpot*100,2)}%` : '';
-
-  if (focusOk) {
-    dot.className   = 'focus-dot';
-    lbl.textContent = 'Focus '+FOCUS.lastUpdate.slice(0,10)+cdiMark+curvesMark;
-  } else if (!silent) {
-    dot.className = 'focus-dot stale';
-    // Mostra que falhou, mas que a Curva da B3 ou o SGS podem ter carregado normal
-    if (lbl.textContent.startsWith('Atualizando')) lbl.textContent = 'Focus (Offline)'+cdiMark+curvesMark;
-  }
-
-  if (dashData) buildLineChart(projPeriod);
-}
+refreshFocus(true);
+</script>
+</body>
+</html>
