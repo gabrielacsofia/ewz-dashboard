@@ -1512,7 +1512,7 @@ function renderDash(d) {
   
   const rfPct = d.totalPortfolio > 0 ? (d.totalRF / d.totalPortfolio * 100).toFixed(1) : '—';
 
-  // Painel Superior de Resumo (Com as Projeções de Gross-up Restauradas)
+  // Painel Superior de Resumo (Correção Aplicada Aqui)
   document.getElementById('dash').innerHTML = `
   <div class="strip">
     <div class="sc hi">
@@ -1523,12 +1523,12 @@ function renderDash(d) {
     <div class="sc">
       <div class="label">Retorno 12M</div>
       <div class="val g">${d.r12m ? fmtR(d.r12m) + '%' : '—'}</div>
-      ${d.r12mCdi != null ? \`<div class="sub">CDI 12M: \${fmtR(d.r12mCdi)}%</div>\` : ''}
+      ${d.r12mCdi != null ? `<div class="sub">CDI 12M: ${fmtR(d.r12mCdi)}%</div>` : ''}
     </div>
     <div class="sc">
       <div class="label">Retorno Máximo</div>
       <div class="val g">${d.rmax ? fmtR(d.rmax) + '%' : '—'}</div>
-      <div class="sub">${d.portfolioMonths ? \`em \${d.portfolioMonths} meses\` : 'histórico'}</div>
+      <div class="sub">${d.portfolioMonths ? `em ${d.portfolioMonths} meses` : 'histórico'}</div>
     </div>
     <div class="sc">
       <div class="label">Proj. RF Gross-up (26)</div>
@@ -1684,7 +1684,6 @@ function renderDash(d) {
   
   buildLineChart(12);
 }
-
 // ─── TABELA MODAL DETALHADA ─────────────────────────────────────────────────
 function openModal(nm, assets) {
   let html = '';
