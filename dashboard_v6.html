@@ -1186,11 +1186,14 @@ function calcGrossUpPre(r, v) {
   return +(r / (1 - ir)).toFixed(2);
 }
 
-function getExemptStatus(a, p, ir) {
-  const irf = parseFloat(ir);
+function getExemptStatus(a, p, ir_ou_vl, vb) {
+  const val = parseFloat(ir_ou_vl);
   
-  if (!isNaN(irf)) {
-    return irf === 0 ? 'exempt' : 'taxable';
+  if (!isNaN(val)) {
+    // Considera isento se a coluna for 0 (IR = 0) ou se for igual ao Valor Bruto (VL = VB)
+    if (val === 0 || Math.abs(val - vb) < 0.05) {
+      return 'exempt';
+    }
   }
   
   const aStr = (a || '').trim();
@@ -1430,7 +1433,7 @@ function parseExcel(ab) {
       
       const a = r[4];
       const p = r[5];
-      const ex = getExemptStatus(a, p, r[14]);
+      const ex = getExemptStatus(a, p, r[14], vb);
       const tx = parseFloat(r[10]) || 0;
       const ven = r[11] ?? null;
       
@@ -1776,13 +1779,15 @@ function renderDash(d) {
           <div class="tc-sub">${subDesc}</div>
           ${gu}
         </div>
-        <div class="tc-donut-wrap">
-          <svg class="circular-chart" viewBox="0 0 60 60">
-            <path class="circle-bg" d="M30 6 a 24 24 0 0 1 0 48 a 24 24 0 0 1 0 -48" />
-            <path class="circle" stroke-dasharray="${circumference}, ${circumference}" stroke-dashoffset="${offset}" stroke="${mainColor}" d="M30 6 a 24 24 0 0 1 0 48 a 24 24 0 0 1 0 -48" />
-          </svg>
-          <div style="position:absolute; margin-top:-6px; font-size:0.65rem; font-weight:700; color:${mainColor}; text-align:center;">
-            ${donutCenterTxt}<br><span style="font-size:0.45rem; font-weight:400; color:var(--muted)">do CDI</span>
+<div class="tc-donut-wrap">
+          <div style="position:relative; width:60px; height:60px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <svg class="circular-chart" viewBox="0 0 60 60" style="position:absolute; top:0; left:0; width:100%; height:100%; margin:0; max-width:none;">
+              <path class="circle-bg" d="M30 6 a 24 24 0 0 1 0 48 a 24 24 0 0 1 0 -48" />
+              <path class="circle" stroke-dasharray="${circumference}, ${circumference}" stroke-dashoffset="${offset}" stroke="${mainColor}" d="M30 6 a 24 24 0 0 1 0 48 a 24 24 0 0 1 0 -48" />
+            </svg>
+            <div style="position:relative; z-index:1; font-size:0.65rem; font-weight:700; color:${mainColor}; text-align:center; line-height:1.1; margin-top:2px;">
+              ${donutCenterTxt}<br><span style="font-size:0.45rem; font-weight:400; color:var(--muted)">do CDI</span>
+            </div>
           </div>
           <div style="font-size:0.6rem; color:var(--muted); margin-top:6px; text-align:center;">Alocação RF</div>
           <div style="font-size:1.1rem; font-weight:700; color:${mainColor}; text-align:center; line-height:1;">${v.weight.toFixed(1)}%</div>
