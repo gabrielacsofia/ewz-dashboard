@@ -1863,20 +1863,7 @@ function openModal(nm, assets) {
   assets.sort((a, b) => b.valorBruto - a.valorBruto).forEach(a => {
     let im = '';
     
-    if (nm === 'IPCA+' && a.vencimento) {
-      const m = parseVencimento(a.vencimento);
-      if (m) {
-        let infStr = '';
-        if (MARKET.curvesLoaded && m > new Date()) {
-          const tr = interpolarTaxa(MARKET.curvaIpca, m);
-          const tn = interpolarTaxa(MARKET.curvaPre, m);
-          if (tr !== null && tn !== null) {
-            infStr = ` (Implícita B3: ${fmtR(((1 + tn / 100) / (1 + tr / 100) - 1) * 100)}%)`;
-          }
-        }
-        im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;">Venc: ${m.toLocaleDateString('pt-BR')}${infStr}</div>`;
-      }
-    } else if (a.vencimento) {
+if (a.vencimento) {
        const m = parseVencimento(a.vencimento);
        if (m) im = `<div style="font-size:0.6rem;color:var(--muted);margin-top:3px;">Venc: ${m.toLocaleDateString('pt-BR')}</div>`;
     }
