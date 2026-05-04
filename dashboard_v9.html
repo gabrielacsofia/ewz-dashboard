@@ -1784,7 +1784,7 @@ function buildLineChart(mths) {
   
   const dts = dtsRaw.filter(x => x.d && activeSeriesSet.has(x.k));
   
-  charts.line = new Chart(document.getElementById('lc').getContext('2d'), {
+ charts.line = new Chart(document.getElementById('lc').getContext('2d'), {
     type: 'line',
     data: {
       labels: lbls,
@@ -1792,21 +1792,52 @@ function buildLineChart(mths) {
         label: x.k, 
         data: x.d, 
         borderColor: x.c, 
+        backgroundColor: x.c, 
         borderDash: x.dash || [], 
         borderWidth: x.w, 
         pointRadius: 0, 
+        pointHoverRadius: 5, 
         tension: 0.3 
       }))
     },
     options: {
       responsive: true, 
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      interaction: {
+        mode: 'index', 
+        intersect: false, 
+      },
+      plugins: { 
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f2014',
+          titleColor: '#7bc44a',
+          titleFont: { family: 'DM Sans', size: 13, weight: 'bold' },
+          bodyColor: '#e8e0d0',
+          bodyFont: { family: 'DM Sans', size: 12 },
+          borderColor: '#263f2a',
+          borderWidth: 1,
+          padding: 12,
+          boxPadding: 6,
+          callbacks: {
+            title: function(context) {
+              return 'Acumulado: ' + context[0].label;
+            },
+            label: function(context) {
+              let val = context.raw - 100;
+              let sign = val > 0 ? '+' : '';
+              return context.dataset.label + ': ' + sign + val.toFixed(2) + '%';
+            }
+          }
+        }
+      },
       scales: { 
         x: { grid: { color: 'rgba(28,61,32,0.3)' } }, 
         y: { 
           grid: { color: 'rgba(28,61,32,0.3)' }, 
-          callback: v => '+' + (v - 100).toFixed(1) + '%' 
+          ticks: {
+            callback: function(v) { return '+' + (v - 100).toFixed(1) + '%'; }
+          }
         } 
       }
     }
