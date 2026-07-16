@@ -14,7 +14,26 @@
     align-items: center;
     gap: 16px;
   }
-  .logo-icon { width: 40px; height: 40px; flex-shrink: 0; }
+  .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: #1a3d24;
+    border: 1.5px solid #B4DF5B;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-icon svg {
+    width: 20px;
+    height: 20px;
+  }
   .logo-text { display: flex; flex-direction: column; gap: 2px; }
   .logo-title {
     font-size: 20px; font-weight: 500; color: #fff;
@@ -259,10 +278,19 @@
 
 <div class="dash-root">
   <div class="header">
-    <img style="height:36px;width:auto;object-fit:contain;" src="data:image/png;base64,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/+7v/vP/Z//5f//+H//5H//+D///H//+D///H//+A/UKeOf1b/+9U/UP3re+rX/+qX/UPVP1b/+9W/Xv2/Xv+L+h+v/r/q/4f/9Z+//H8e+09X/7/8fxb7L1/9Z+u/ZP3p7f/2rf//p///9v//7f/9t/9/6+t/3P//8u//5b/8/y///7f985e1v//b+v9P6//93/7v/2n/77/t//7b///f9v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///d///9//6///m//7//f///3P/v///df/uP///D8A8OunO221V2QAAAAASUVORK5CYII=" alt="EWZ Logo">
-    <div class="logo-text">
-      <div class="logo-title"><span>EWZ</span>Capital</div>
-      <div class="logo-sub">Portal do Trainee</div>
+    <div class="logo-container">
+      <div class="logo-icon">
+        <!-- SVG icon financeiro robusto substituindo a imagem quebrada -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="#B4DF5B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-title"><span>EWZ</span>Capital</div>
+        <div class="logo-sub">Portal do Trainee</div>
+      </div>
     </div>
     <div class="divider"></div>
     <div class="trainee-badge">Acesso rápido</div>
@@ -271,7 +299,7 @@
   <div class="content">
     <div class="section-label">Ferramentas e recursos</div>
 
-    <a class="playbook-card" href="https://app.notion.com/p/Aquecimento-de-Lead-39ec9904294f80b9ba4ed5a2e68b9433?source=copy_link" target="_blank">
+    <a class="playbook-card" href="https://app.notion.com/p/Playbook-do-Trainee-39ec9904294f80aa85daca8a4e8d1159" target="_blank">
       <div class="card-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="#B4DF5B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
@@ -304,7 +332,8 @@
         <div class="card-arrow">›</div>
       </a>
 
-      <a class="card" href="https://docs.google.com/spreadsheets/d/19vSXPYrx86D2VYeh4tEttPLhpzy76CkMNcO0y50qy1I/edit?gid=541586510#gid=541586510" target="_blank">
+      <!-- LINK DE AGENDA LEONARDO ATUALIZADO -->
+      <a class="card" href="https://docs.google.com/spreadsheets/d/19vSXPYrx86D2VYeh4tEttPLhpzy76CkMNcO0y50qy1I/edit?gid=1882167390#gid=1882167390" target="_blank">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="#B4DF5B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -320,7 +349,7 @@
         <div class="card-arrow">›</div>
       </a>
 
-      <!-- LINK DE PAGAMENTO BUTTON/CARD -->
+      <!-- LINK DE PAGAMENTO ATUALIZADO PARA CELCASH -->
       <button class="card" onclick="copyPaymentLink(this)">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="#B4DF5B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -350,7 +379,7 @@
       <div class="card-arrow" id="meet-arrow">⎘</div>
     </button>
 
-    <!-- VOIP CARD UPGRADED TO SHOW 5 EXTENSIONS -->
+    <!-- VOIP CARD -->
     <div class="voip-card">
       <div class="voip-header" onclick="toggleVoip()">
         <div class="card-icon" style="background:#1a3d24;border:1px solid #3a7040;border-radius:12px;width:46px;height:46px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -461,8 +490,7 @@ function copyTableText(ext, pwd, cellId, btn) {
 }
 
 function copyPaymentLink(btn) {
-  // Altere o link de pagamento abaixo com o seu link oficial:
-  var link = 'https://link.ewzcapital.com.br/pagamento';
+  var link = 'https://celcash.celcoin.com.br/landingpage8093333/trainees';
   navigator.clipboard.writeText(link).then(function() {
     document.getElementById('payment-title').textContent = 'Link copiado!';
     document.getElementById('payment-desc').textContent = link;
